@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+    #placeholder {
+      color: #888;
+      text-align: center;
+      font-size: 18px;
+      line-height: 2;
+    }
+    #placeholder .big { font-size: 48px; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div id="placeholder">
+    <div class="big">🎮</div>
+    <div>Your game will appear here!</div>
+    <div style="font-size:14px; color:#666; margin-top:8px">Describe a game and press Make My Game →</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+  <script>
+    let game = null;
+    let currentConfig = null;
+
+    // Default config shown when no prompt given
+    const DEFAULT_CONFIG = {
+      heroEmoji: '🐶',
+      enemyEmoji: '🐱',
+      backgroundColor: '#87CEEB',
+      groundColor: '#5a8a5a',
+      title: 'Dog Jump!',
+      speed: 250,
+      jumpForce: 580
+    };
+
+    function startGame(config) {
+      currentConfig = config;
+
+      // Hide placeholder
+      const placeholder = document.getElementById('placeholder');
+      if (placeholder) placeholder.style.display = 'none';
+
+      // Destroy existing game
+      if (game) {
+        game.destroy(true);
+        game = null;
+      }
+
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const GROUND_Y = H * 0.78;
+      const GROUND_HEIGHT = H - GROUND_Y;
+
+      class GameScene extends Phaser.Scene {
+        constructor() { super({ key: 'GameScene' }); }
+
+        create() {
+          this.gameOver = false;
+          this.score = 0;
+          this.spawnTimer = 0;
+          this.spawnInterval = 2200; // ms between enemies
+          this.lastTime = 0;
+
+          // Background
+          this.cameras.main.setBackgroundColor(config.backgroundColor || '#87CEEB');
+
+          // Clouds (decorative)
+          this.clouds = [];
+          for (let i = 0; i < 4; i++) {
+            const cloud = this.add.text(
+              Phaser.Math.Between(0, W),
+              Phaser.Math.Between(30, GROUND_Y * 0.4),
+              '☁️',
+              { fontSize: Phaser.Math.Between(28, 52) + 'px' }
+            );
+            cloud.speed = Phaser.Math.Between(20, 50);
+            this.clouds.push(cloud);
+          }
+
+          // Ground
+          this.add.rectangle(W / 2, GROUND_Y + GROUND_HEIGHT / 2, W, GROUND_HEIGHT, 0x5a8a5a);
+
+          // Ground line detail
+          this.add.rectangle(W / 2, GROUND_Y + 2, W, 4, 0x3d6b3d);
+
+          // Hero (emoji text object)
+          this.hero = this.add.text(120, GROUND_Y - 10, config.heroEmoji, {
+            fontSize: '52px'
+          }).setOrigin(0.5, 1);
+
+          this.heroVelocityY = 0;
+          this.isJumping = false;
+          this.jumpForce = config.jumpForce || 580;
+          this.gravity = 1400;
+
+          // Enemies array
+          this.enemies = [];
+
+          // Score text
+          this.scoreTxt = this.add.text(W - 20, 20, 'Score: 0', {
+            fontSize: '24px',
+            color: '#fff',
+            stroke: '#000',
+            strokeThickness: 4,
+          }).setOrigin(1, 0);
+
+          // Title
+          this.add.text(20, 20, config.title || 'Game!', {
+            fontSize: '22px',
+            color: '#fff',
+            stroke: '#000',
+            strokeThickness: 4,
+          });
+
+          // Jump on spacebar, click, or tap
+          this.input.keyboard.on('keydown-SPACE', () => this.doJump());
+          this.input.on('pointerdown', () => this.doJump());
+
+          // Start message
+          this.startMsg = this.add.text(W / 2, GROUND_Y * 0.5, 'SPACE or Tap to Jump!', {
+            fontSize: '28px',
+            color: '#fff',
+            stroke: '#000',
+            strokeThickness: 5,
+            backgroundColor: '#0008',
+            padding: { x: 16, y: 8 },
+          }).setOrigin(0.5).setDepth(10);
+
+          // Auto-hide start message after 2s
+          this.time.delayedCall(2000, () => {
+            if (this.startMsg) this.startMsg.setAlpha(0);
+          });
+
+          this.isStarted = true;
+          this.gameOverText = null;
+        }
+
+        doJump() {
+          if (this.gameOver) {
+            this.scene.restart();
+            return;
+          }
+          if (!this.isJumping) {
+            this.heroVelocityY = -this.jumpForce;
+            this.isJumping = true;
+          }
+        }
+
+        update(time, delta) {
+          if (this.gameOver) return;
+
+          const dt = delta / 1000; // seconds
+          const groundY = GROUND_Y;
+          const speed = config.speed || 250;
+
+          // Move clouds
+          this.clouds.forEach(c => {
+            c.x -= c.speed * dt;
+            if (c.x < -80) c.x = W + 80;
+          });
+
+          // Hero physics
+          this.heroVelocityY += this.gravity * dt;
+          this.hero.y += this.heroVelocityY * dt;
+
+          // Ground collision for hero
+          if (this.hero.y >= groundY - 10) {
+            this.hero.y = groundY - 10;
+            this.heroVelocityY = 0;
+            this.isJumping = false;
+          }
+
+          // Spawn enemies
+          this.spawnTimer += delta;
+          if (this.spawnTimer >= this.spawnInterval) {
+            this.spawnTimer = 0;
+            // Vary interval slightly for fun
+            this.spawnInterval = Phaser.Math.Between(1500, 2800);
+
+            const enemy = this.add.text(W + 40, groundY - 10, config.enemyEmoji, {
+              fontSize: '48px'
+            }).setOrigin(0.5, 1);
+            enemy.velocityX = -(speed + Phaser.Math.Between(0, 60));
+            this.enemies.push(enemy);
+          }
+
+          // Move enemies + collision check
+          const heroBox = {
+            x: this.hero.x - 18,
+            y: this.hero.y - 44,
+            w: 36,
+            h: 44,
+          };
+
+          for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const e = this.enemies[i];
+            e.x += e.velocityX * dt;
+
+            // Remove off-screen
+            if (e.x < -60) {
+              e.destroy();
+              this.enemies.splice(i, 1);
+              this.score++;
+              this.scoreTxt.setText('Score: ' + this.score);
+              continue;
+            }
+
+            // Simple box collision
+            const eBox = {
+              x: e.x - 16,
+              y: e.y - 40,
+              w: 32,
+              h: 40,
+            };
+
+            const overlapping =
+              heroBox.x < eBox.x + eBox.w &&
+              heroBox.x + heroBox.w > eBox.x &&
+              heroBox.y < eBox.y + eBox.h &&
+              heroBox.y + heroBox.h > eBox.y;
+
+            if (overlapping) {
+              this.triggerGameOver();
+              return;
+            }
+          }
+        }
+
+        triggerGameOver() {
+          this.gameOver = true;
+
+          // Flash hero
+          this.hero.setText('💥');
+
+          // Game over panel
+          const panel = this.add.rectangle(W / 2, H / 2, 360, 200, 0x000000, 0.75)
+            .setDepth(20);
+
+          this.add.text(W / 2, H / 2 - 50, '💀 Game Over!', {
+            fontSize: '36px',
+            color: '#ff4444',
+            stroke: '#000',
+            strokeThickness: 4,
+          }).setOrigin(0.5).setDepth(21);
+
+          this.add.text(W / 2, H / 2 + 0, 'Score: ' + this.score, {
+            fontSize: '28px',
+            color: '#fff',
+          }).setOrigin(0.5).setDepth(21);
+
+          this.add.text(W / 2, H / 2 + 48, 'Tap or SPACE to play again!', {
+            fontSize: '18px',
+            color: '#aaa',
+          }).setOrigin(0.5).setDepth(21);
+        }
+      }
+
+      game = new Phaser.Game({
+        type: Phaser.AUTO,
+        width: W,
+        height: H,
+        backgroundColor: config.backgroundColor || '#87CEEB',
+        scene: [GameScene],
+        parent: document.body,
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+        },
+        audio: { disableWebAudio: true },
+      });
+    }
+
+    // Listen for config from parent page
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'LOAD_CONFIG') {
+        startGame(event.data.config);
+      }
+    });
+  </script>
+</body>
+</html>
