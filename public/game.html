@@ -285,10 +285,37 @@
       });
     }
 
-    // Listen for config from parent page
+    // Listen for config or generated code from parent page
     window.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'LOAD_CONFIG') {
+      if (!event.data) return;
+
+      if (event.data.type === 'LOAD_CONFIG') {
+        // Tear down any code-generated game first
+        if (window.__phaserGame) {
+          window.__phaserGame.destroy(true);
+          window.__phaserGame = null;
+        }
         startGame(event.data.config);
+
+      } else if (event.data.type === 'LOAD_CODE') {
+        // Tear down runner game and any previous code game
+        if (game) { game.destroy(true); game = null; }
+        if (window.__phaserGame) { window.__phaserGame.destroy(true); window.__phaserGame = null; }
+
+        const ph = document.getElementById('placeholder');
+        if (ph) ph.style.display = 'none';
+
+        try {
+          // Generated code runs here; it must set window.__phaserGame = new Phaser.Game(...)
+          (new Function(event.data.code))();
+        } catch (err) {
+          console.error('[LOAD_CODE] Generated game error:', err);
+          // Show a friendly error in the placeholder area
+          if (ph) {
+            ph.style.display = '';
+            ph.innerHTML = '<div class="big">⚠️</div><div>Oops, couldn\'t start that game.</div><div style="font-size:13px;color:#666;margin-top:8px">Try asking again — the AI might do better!</div>';
+          }
+        }
       }
     });
   </script>

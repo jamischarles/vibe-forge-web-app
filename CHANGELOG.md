@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-02
+
+### Added — Milestone 3: Game Clone Generation
+- **"Build a Clone" mode** — AI generates a complete custom Phaser 3 game from scratch (not just a reskin of the runner)
+  - Mode toggle in the input area: `✨ Simple Game` / `🕹️ Build a Clone`
+  - Clone mode uses **GPT-4o** (not mini) for reliable game code generation
+  - Simple mode continues using GPT-4o-mini for fast runner config generation
+- **Clone keyword detection** — fallback safety net: prompts containing "lander", "flappy", "pong", "breakout", "snake", "asteroids", "tetris", "platformer", etc. auto-route to code generation even without the toggle
+- **`LOAD_CODE` iframe handler** — `game.html` now accepts `postMessage({ type: 'LOAD_CODE', code })` alongside existing `LOAD_CONFIG`; runs generated JS via `(new Function(code))()` with full error recovery
+- **Adaptive UI for clone mode**
+  - Orange accent color throughout (toggle, submit button, Playing badge, Settings dot)
+  - Textarea border turns orange in clone mode; placeholder switches to "Name a classic game..."
+  - Hint chips switch to clone-specific: "Make it harder", "Add a twist", "Change the controls"
+  - Submit button: "Build Clone!" / "Rebuild Clone!" with `Code2` icon
+  - Settings tab shows 🕹️ title + "Custom-coded game — use chat to modify" (no editable fields for code games)
+  - Loading message switches to "Coding your clone..." / "Recoding your game..."
+- **Iteration on code games** — saying "make it harder" re-generates with accumulated description; `codeAccumPrompt` tracks the full history
+- **New types**: `GameCodeResult`, `GameConfigResult`, `GameResult` discriminated union in `lib/types.ts`
+- **New API shape**: route now returns `{ type: 'config', config }` or `{ type: 'code', title, code }` — frontend branches on `data.type`
+
 ## [0.2.2] - 2026-03-02
 
 ### Added

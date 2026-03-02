@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { GameConfig, SPEED_MIN, SPEED_MAX } from './types'
+import { GameConfig, SPEED_MIN, SPEED_MAX, GameCodeResult } from './types'
 
 export type { GameConfig }
 export { SPEED_MIN, SPEED_MAX }
@@ -115,5 +115,100 @@ export async function generateGameConfig(
   } catch (error) {
     console.error('Error generating game config:', error)
     return isUpdate ? currentConfig : DEFAULT_CONFIG
+  }
+}
+
+// ── Game clone code generation ────────────────────────────────────────────────
+
+const CLONE_KEYWORDS = [
+  'lander', 'lunar lander', 'flappy', 'flappy bird', 'pong', 'breakout',
+  'arkanoid', 'snake', 'asteroids', 'space invader', 'space invaders',
+  'tetris', 'platformer', 'mario', 'brick', 'tapper', 'frogger',
+  'galaga', 'centipede', 'pacman', 'pac-man', 'clone',
+]
+
+export function isCloneRequest(prompt: string): boolean {
+  const lower = prompt.toLowerCase()
+  return CLONE_KEYWORDS.some(k => lower.includes(k))
+}
+
+const CODE_GEN_SYSTEM_PROMPT = `You are an expert Phaser 3 game developer writing games for kids.
+Given a game description, write a COMPLETE, WORKING Phaser 3 JavaScript game.
+
+STRICT RULES:
+1. Write ONLY JavaScript — no HTML, no <script> tags, no markdown code fences
+2. Your code runs via (new Function(code))() in a sandboxed iframe with Phaser 3.70.0 already loaded
+3. MUST end with: window.__phaserGame = new Phaser.Game({...})
+4. Use EMOJI strings for ALL characters (hero, enemies, obstacles) — no image files
+5. Canvas fills the full window: width: window.innerWidth, height: window.innerHeight
+6. Scale: mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH
+7. Always include: title top-left, score top-right, game-over panel centered
+8. Always wire BOTH inputs: keyboard (cursors / SPACE / WASD) AND pointer tap
+9. On game over: show score, then restart on SPACE/tap via this.scene.restart()
+10. Physics: use update(time, delta) with const dt = delta/1000 — manual integration
+11. Target ~200 lines — clean readable code with brief comments
+12. audio: { disableWebAudio: true } in Phaser config (iframe sandbox restriction)
+
+EMOJI RENDERING PATTERN (use this exactly):
+  this.hero = this.add.text(x, y, '🚀', { fontSize: '48px', fontFamily: 'Arial' }).setOrigin(0.5)
+
+PHYSICS PATTERN (use this for movement):
+  // In update:
+  this.velY += this.gravity * dt        // gravity accumulation
+  this.hero.y += this.velY * dt         // apply velocity
+  if (this.hero.y > groundY) { this.hero.y = groundY; this.velY = 0 }
+
+GAME STRUCTURE (follow this class pattern):
+  class GameScene extends Phaser.Scene {
+    constructor() { super({ key: 'GameScene' }) }
+    create() { /* set up all objects, inputs, score text */ }
+    update(time, delta) { /* physics, movement, collision, score */ }
+    gameOver() { /* show panel, wait for restart */ }
+  }
+  window.__phaserGame = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: window.innerWidth, height: window.innerHeight,
+    scene: [GameScene],
+    parent: document.body,
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    backgroundColor: '#1a1a2e',
+    audio: { disableWebAudio: true },
+  })
+
+COLLISION DETECTION (simple AABB):
+  function overlaps(a, b, aw, ah, bw, bh) {
+    return Math.abs(a.x - b.x) < (aw + bw)/2 && Math.abs(a.y - b.y) < (ah + bh)/2
+  }
+
+Respond with ONLY the JavaScript code. No explanation, no code fences.`
+
+export async function generateGameCode(userPrompt: string): Promise<GameCodeResult> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: CODE_GEN_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.4,
+      max_tokens: 3500,
+    })
+
+    const code = completion.choices[0]?.message?.content?.trim() ?? ''
+
+    // Strip accidental markdown fences if model disobeys
+    const cleaned = code
+      .replace(/^```(?:javascript|js)?\n?/i, '')
+      .replace(/\n?```$/i, '')
+      .trim()
+
+    // Extract title from the code (look for a text object with the game title)
+    const titleMatch = cleaned.match(/this\.add\.text\([^,]+,\s*[^,]+,\s*['"]([^'"]{1,30})['"]/i)
+    const title = titleMatch?.[1] ?? userPrompt.slice(0, 25)
+
+    return { type: 'code', title, code: cleaned }
+  } catch (error) {
+    console.error('Error generating game code:', error)
+    throw error   // let the API route handle this — no silent fallback for code gen
   }
 }
