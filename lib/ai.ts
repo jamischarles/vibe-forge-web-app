@@ -1,18 +1,12 @@
 import OpenAI from 'openai'
+import { GameConfig, SPEED_MIN, SPEED_MAX } from './types'
+
+export type { GameConfig }
+export { SPEED_MIN, SPEED_MAX }
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
-
-export interface GameConfig {
-  heroEmoji: string
-  enemyEmoji: string
-  backgroundColor: string
-  groundColor: string
-  title: string
-  speed: number
-  jumpForce: number
-}
 
 const CREATE_SYSTEM_PROMPT = `You are a fun game design helper for kids. A kid will describe a game idea and you will turn it into a game config.
 
@@ -24,7 +18,7 @@ Rules:
 - backgroundColor: a hex color for the sky/background (make it match the theme)
 - groundColor: always "#5a8a5a" (green ground)
 - title: a fun short game title (max 20 chars)
-- speed: a number between 200 and 350 (how fast enemies move)
+- speed: a number between 200 and 350 (how fast enemies move — start reasonable, not too fast)
 - jumpForce: always 580
 
 Examples:
@@ -52,15 +46,17 @@ You will receive:
 
 Your job: return the UPDATED config. ONLY change the fields the kid mentioned. Keep everything else EXACTLY the same.
 
-Rules:
-- If they say "make it faster" → increase speed (max 380), keep everything else
-- If they say "change the hero to a cat" → update heroEmoji only
-- If they say "make the background purple" → update backgroundColor only
-- If they say "make it harder" → increase speed by ~50, keep everything else
-- If they say "make it easier" or "slower" → decrease speed by ~50, keep everything else
+Speed rules (range is 180–600):
+- "make it faster" or "faster" → add exactly 75 to current speed (cap at 600)
+- "make it harder" or "harder" → add exactly 75 to current speed (cap at 600)
+- "make it slower" or "easier" → subtract exactly 75 from current speed (floor at 180)
+- Never go above 600 or below 180
+
+Other rules:
+- "change the hero to a cat" → update heroEmoji only
+- "make the background purple" → update backgroundColor only
 - groundColor: always keep as "#5a8a5a"
 - jumpForce: always keep as 580
-- speed: always keep between 180 and 380
 
 Respond with ONLY valid JSON of the complete updated config, no explanation, no markdown.`
 
@@ -73,6 +69,7 @@ const DEFAULT_CONFIG: GameConfig = {
   speed: 250,
   jumpForce: 580,
 }
+
 
 export async function generateGameConfig(
   userPrompt: string,
@@ -101,8 +98,8 @@ export async function generateGameConfig(
 
     const config = JSON.parse(content) as GameConfig
 
-    // Clamp speed to safe range
-    config.speed = Math.max(180, Math.min(380, config.speed || 250))
+    // Clamp speed to full range
+    config.speed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, config.speed || 250))
     config.jumpForce = 580 // always fixed
     config.groundColor = '#5a8a5a' // always fixed
 
@@ -117,7 +114,6 @@ export async function generateGameConfig(
     return config
   } catch (error) {
     console.error('Error generating game config:', error)
-    // In update mode, fall back to current config so the game doesn't reset
     return isUpdate ? currentConfig : DEFAULT_CONFIG
   }
 }

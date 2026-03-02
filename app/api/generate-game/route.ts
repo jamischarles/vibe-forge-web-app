@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateGameConfig, GameConfig } from '@/lib/ai'
+import { generateGameConfig } from '@/lib/ai'
+import { GameConfig } from '@/lib/types'
 
 export async function POST(request: NextRequest) {
   try {

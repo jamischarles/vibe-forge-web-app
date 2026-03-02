@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-03-02
+
+### Fixed
+- **Speed ceiling bug** — "Make it faster" was immediately hitting the old max of 380 and stalling. `SPEED_MAX` raised to 600; `UPDATE_SYSTEM_PROMPT` now instructs the model to add exactly 75 each time (cap 600, floor 180)
+- **Client-side OpenAI crash** — shared types (`GameConfig`, `SPEED_MIN`, `SPEED_MAX`) extracted into new `lib/types.ts` so `page.tsx` can import them without pulling the server-only OpenAI client into the browser bundle
+
+### Added
+- **Settings tab** — second tab in the left rail shows current `GameConfig` at a glance
+  - Title, hero emoji, enemy emoji displayed
+  - Speed shown as a color-coded progress bar (green → yellow → red)
+  - Background and ground colors shown as swatches with hex values
+  - Blue dot indicator on the Settings tab when a game is loaded
+  - "Make a game first" empty state when no config exists yet
+
 ## [0.2.0] - 2026-03-02
 
 ### Added — Milestone 2: Game Iteration Loop
