@@ -14,7 +14,7 @@ export interface GameConfig {
   jumpForce: number
 }
 
-const SYSTEM_PROMPT = `You are a fun game design helper for kids. A kid will describe a game idea and you will turn it into a game config.
+const CREATE_SYSTEM_PROMPT = `You are a fun game design helper for kids. A kid will describe a game idea and you will turn it into a game config.
 
 Your job: pick the best emojis and colors that match their description.
 
@@ -44,6 +44,26 @@ Respond with ONLY valid JSON, no explanation, no markdown:
   "jumpForce": 580
 }`
 
+const UPDATE_SYSTEM_PROMPT = `You are a fun game design helper for kids. A kid has an existing game and wants to change something about it.
+
+You will receive:
+1. The current game config (JSON)
+2. What the kid wants to change
+
+Your job: return the UPDATED config. ONLY change the fields the kid mentioned. Keep everything else EXACTLY the same.
+
+Rules:
+- If they say "make it faster" → increase speed (max 380), keep everything else
+- If they say "change the hero to a cat" → update heroEmoji only
+- If they say "make the background purple" → update backgroundColor only
+- If they say "make it harder" → increase speed by ~50, keep everything else
+- If they say "make it easier" or "slower" → decrease speed by ~50, keep everything else
+- groundColor: always keep as "#5a8a5a"
+- jumpForce: always keep as 580
+- speed: always keep between 180 and 380
+
+Respond with ONLY valid JSON of the complete updated config, no explanation, no markdown.`
+
 const DEFAULT_CONFIG: GameConfig = {
   heroEmoji: '🐶',
   enemyEmoji: '🐱',
@@ -54,32 +74,50 @@ const DEFAULT_CONFIG: GameConfig = {
   jumpForce: 580,
 }
 
-export async function generateGameConfig(userPrompt: string): Promise<GameConfig> {
+export async function generateGameConfig(
+  userPrompt: string,
+  currentConfig?: GameConfig
+): Promise<GameConfig> {
+  const isUpdate = !!currentConfig
+
   try {
+    const userMessage = isUpdate
+      ? `Current game config:\n${JSON.stringify(currentConfig, null, 2)}\n\nWhat the kid wants to change: "${userPrompt}"`
+      : userPrompt
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
+        { role: 'system', content: isUpdate ? UPDATE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
       ],
-      temperature: 0.8,
+      temperature: 0.7,
       max_tokens: 200,
       response_format: { type: 'json_object' },
     })
 
     const content = completion.choices[0]?.message?.content
-    if (!content) return DEFAULT_CONFIG
+    if (!content) return isUpdate ? currentConfig : DEFAULT_CONFIG
 
     const config = JSON.parse(content) as GameConfig
 
     // Clamp speed to safe range
     config.speed = Math.max(180, Math.min(380, config.speed || 250))
     config.jumpForce = 580 // always fixed
-    config.groundColor = config.groundColor || '#5a8a5a'
+    config.groundColor = '#5a8a5a' // always fixed
+
+    // In update mode, fill any missing fields from the current config as safety net
+    if (isUpdate) {
+      config.heroEmoji = config.heroEmoji || currentConfig.heroEmoji
+      config.enemyEmoji = config.enemyEmoji || currentConfig.enemyEmoji
+      config.backgroundColor = config.backgroundColor || currentConfig.backgroundColor
+      config.title = config.title || currentConfig.title
+    }
 
     return config
   } catch (error) {
     console.error('Error generating game config:', error)
-    return DEFAULT_CONFIG
+    // In update mode, fall back to current config so the game doesn't reset
+    return isUpdate ? currentConfig : DEFAULT_CONFIG
   }
 }

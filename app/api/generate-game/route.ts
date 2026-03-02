@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateGameConfig } from '@/lib/ai'
+import { generateGameConfig, GameConfig } from '@/lib/ai'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { prompt } = body
+    const { prompt, currentConfig } = body
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
@@ -14,7 +14,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'OPENAI_API_KEY not configured' }, { status: 500 })
     }
 
-    const config = await generateGameConfig(prompt.trim())
+    const config = await generateGameConfig(
+      prompt.trim(),
+      currentConfig as GameConfig | undefined
+    )
 
     return NextResponse.json({ config })
   } catch (error) {

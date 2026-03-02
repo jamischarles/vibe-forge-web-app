@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-02
+
+### Added — Milestone 2: Game Iteration Loop
+- **"Change my game" conversational iteration** — kid can modify a running game without starting over
+  - Separate `UPDATE_SYSTEM_PROMPT` in `lib/ai.ts`: only changes fields the kid mentioned, keeps everything else
+  - `generateGameConfig()` now accepts optional `currentConfig` — switches between create and update mode
+  - On API error in update mode, falls back to current config (game stays alive, not reset to default)
+- **Quick-change hint chips** — "Make it faster", "Make it harder", "Change the hero" — one tap to iterate
+- **Adaptive UI states**
+  - Header subtitle updates to "Playing: [title]" once a game is live
+  - Input placeholder switches to "What would you like to change?" after first game
+  - Submit button switches to blue "Update Game!" (with `RefreshCw` icon) during iteration
+  - Loading text switches to "Updating your game..." vs "Building your game..."
+  - Error fallback keeps `state = 'playing'` instead of dropping back to idle
+- **API route** now accepts optional `currentConfig` in request body and passes it through
+
 ## [0.1.1] - 2026-03-02 🎉 First stable deploy
 
 ### Security

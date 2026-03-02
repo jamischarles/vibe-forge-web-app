@@ -1,17 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Mic, MicOff, Gamepad2, Sparkles, Send } from 'lucide-react'
-
-interface GameConfig {
-  heroEmoji: string
-  enemyEmoji: string
-  backgroundColor: string
-  groundColor: string
-  title: string
-  speed: number
-  jumpForce: number
-}
+import { Mic, MicOff, Gamepad2, Sparkles, RefreshCw } from 'lucide-react'
+import { GameConfig } from '@/lib/ai'
 
 type AppState = 'idle' | 'listening' | 'thinking' | 'playing'
 
@@ -27,10 +18,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [transcript, setTranscript] = useState('')
+  const [currentConfig, setCurrentConfig] = useState<GameConfig | null>(null)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const recognitionRef = useRef<any>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const isIterating = currentConfig !== null
 
   // Check for Web Speech API support
   useEffect(() => {
@@ -65,7 +59,10 @@ export default function Home() {
       const response = await fetch('/api/generate-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: trimmed }),
+        body: JSON.stringify({
+          prompt: trimmed,
+          currentConfig: currentConfig ?? undefined,
+        }),
       })
 
       const data = await response.json()
@@ -76,20 +73,24 @@ export default function Home() {
 
       const config: GameConfig = data.config
 
+      const isUpdate = currentConfig !== null
       const assistantMessage: ChatMessage = {
         role: 'assistant',
-        content: `I made "${config.title}" for you! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump!`,
+        content: isUpdate
+          ? `Updated! ${config.heroEmoji} now dodges ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
+          : `I made "${config.title}" for you! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump!`,
       }
       setMessages(prev => [...prev, assistantMessage])
 
+      setCurrentConfig(config)
       sendConfigToGame(config)
       setState('playing')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to make the game'
       setError(msg)
-      setState('idle')
+      setState(currentConfig ? 'playing' : 'idle')
     }
-  }, [sendConfigToGame])
+  }, [sendConfigToGame, currentConfig])
 
   const handleSubmit = () => {
     if (prompt.trim() && state !== 'thinking') {
@@ -118,30 +119,13 @@ export default function Home() {
       setTranscript('')
     }
 
-    recognition.onresult = (e: any) => {
-      const result = Array.from(e.results)
-        .map((r: any) => r[0].transcript)
-        .join('')
-      setTranscript(result)
-      setPrompt(result)
-    }
-
-    recognition.onend = () => {
-      if (state === 'listening') setState('idle')
-      const currentTranscript = recognitionRef.current?.lastTranscript
-      if (currentTranscript?.trim()) {
-        handleGenerate(currentTranscript)
-      }
-    }
-
     recognition.onerror = () => {
-      setState('idle')
+      setState(currentConfig ? 'playing' : 'idle')
     }
 
     recognitionRef.current = recognition
     recognitionRef.current.lastTranscript = ''
 
-    // Track transcript for onend
     recognition.onresult = (e: any) => {
       const result = Array.from(e.results)
         .map((r: any) => r[0].transcript)
@@ -149,6 +133,14 @@ export default function Home() {
       setTranscript(result)
       setPrompt(result)
       recognitionRef.current.lastTranscript = result
+    }
+
+    recognition.onend = () => {
+      if (state === 'listening') setState(currentConfig ? 'playing' : 'idle')
+      const finalTranscript = recognitionRef.current?.lastTranscript
+      if (finalTranscript?.trim()) {
+        handleGenerate(finalTranscript)
+      }
     }
 
     recognition.start()
@@ -160,6 +152,10 @@ export default function Home() {
     }
   }
 
+  const inputPlaceholder = isIterating
+    ? 'What would you like to change?'
+    : 'Describe your game...'
+
   return (
     <div className="flex h-screen bg-gray-900 overflow-hidden">
       {/* Left Rail */}
@@ -170,7 +166,9 @@ export default function Home() {
             <div className="text-3xl">🎮</div>
             <div>
               <h1 className="text-xl font-bold text-white">Game Maker</h1>
-              <p className="text-xs text-gray-400">Describe your game and play it!</p>
+              <p className="text-xs text-gray-400">
+                {isIterating ? `Playing: ${currentConfig.title}` : 'Describe your game and play it!'}
+              </p>
             </div>
           </div>
         </div>
@@ -210,7 +208,9 @@ export default function Home() {
                   <span className="animate-bounce" style={{ animationDelay: '150ms' }}>✨</span>
                   <span className="animate-bounce" style={{ animationDelay: '300ms' }}>🎮</span>
                 </span>
-                <span className="ml-2 text-gray-400">Building your game...</span>
+                <span className="ml-2 text-gray-400">
+                  {isIterating ? 'Updating your game...' : 'Building your game...'}
+                </span>
               </div>
             </div>
           )}
@@ -232,12 +232,27 @@ export default function Home() {
             </div>
           )}
 
+          {/* Iteration hint chips */}
+          {isIterating && state !== 'thinking' && (
+            <div className="flex flex-wrap gap-1.5">
+              {['Make it faster', 'Make it harder', 'Change the hero'].map(hint => (
+                <button
+                  key={hint}
+                  onClick={() => handleGenerate(hint)}
+                  className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2.5 py-1 rounded-full transition-colors"
+                >
+                  {hint}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-2">
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Describe your game..."
+              placeholder={inputPlaceholder}
               disabled={state === 'thinking' || state === 'listening'}
               className="flex-1 bg-gray-700 text-white placeholder-gray-500 rounded-xl px-3 py-2 text-sm resize-none border border-gray-600 focus:outline-none focus:border-green-500 transition-colors min-h-[60px]"
               rows={2}
@@ -254,7 +269,7 @@ export default function Home() {
                     ? 'bg-red-500 hover:bg-red-600 animate-pulse'
                     : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                 }`}
-                title={state === 'listening' ? 'Stop recording' : 'Speak your game idea'}
+                title={state === 'listening' ? 'Stop recording' : 'Speak your idea'}
               >
                 {state === 'listening' ? <MicOff size={20} className="text-white" /> : <Mic size={20} />}
               </button>
@@ -267,14 +282,21 @@ export default function Home() {
                 state === 'thinking'
                   ? 'bg-purple-800 text-purple-300 cursor-not-allowed'
                   : prompt.trim()
-                  ? 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-900/50'
+                  ? isIterating
+                    ? 'bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-900/50'
+                    : 'bg-green-500 hover:bg-green-400 text-white shadow-lg shadow-green-900/50'
                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
             >
               {state === 'thinking' ? (
                 <>
                   <Sparkles size={16} className="animate-spin" />
-                  Making...
+                  {isIterating ? 'Updating...' : 'Making...'}
+                </>
+              ) : isIterating ? (
+                <>
+                  <RefreshCw size={16} />
+                  Update Game!
                 </>
               ) : (
                 <>
@@ -284,12 +306,6 @@ export default function Home() {
               )}
             </button>
           </div>
-
-          {state === 'playing' && (
-            <p className="text-xs text-center text-gray-500">
-              Describe a new game to change it →
-            </p>
-          )}
         </div>
       </div>
 
