@@ -96,7 +96,7 @@
 
       init: function(scene) {
         var st = {};
-        var actions = config.actions || [];
+        var actions = (currentConfig && currentConfig.actions) || [];
         actions.forEach(function(a) {
           if (a.type === 'lives') {
             st.lives = (a.params && a.params.count) || 3;
@@ -121,7 +121,7 @@
           }
           if (a.type === 'speed-ramp') {
             st.speedRampTimer = 0;
-            st.currentSpeed = config.speed || 250;
+            st.currentSpeed = (currentConfig && currentConfig.speed) || 250;
           }
         });
         ActionSystem.state = st;
@@ -151,10 +151,10 @@
 
       // Returns effective speed for this frame (may be increased by speed-ramp)
       tick: function(scene, time, delta, dt, heroX, heroY) {
-        var actions = config.actions || [];
+        var actions = (currentConfig && currentConfig.actions) || [];
         var st = ActionSystem.state;
-        var speed = (st.currentSpeed !== undefined) ? st.currentSpeed : (config.speed || 250);
-        var isTopDown = config.template === 'topdown';
+        var speed = (st.currentSpeed !== undefined) ? st.currentSpeed : ((currentConfig && currentConfig.speed) || 250);
+        var isTopDown = currentConfig && currentConfig.template === 'topdown';
 
         actions.forEach(function(a) {
 
@@ -253,7 +253,7 @@
               st.speedRampTimer = 0;
               var inc = (a.params && a.params.increment) || 30;
               var maxSpd = (a.params && a.params.maxSpeed) || 600;
-              st.currentSpeed = Math.min(maxSpd, (st.currentSpeed || config.speed || 250) + inc);
+              st.currentSpeed = Math.min(maxSpd, (st.currentSpeed || (currentConfig && currentConfig.speed) || 250) + inc);
             }
             speed = st.currentSpeed;
           }
@@ -267,7 +267,7 @@
         var GROUND_Y = Math.floor(H * 0.78);
         var emoji = (action.params && action.params.spawnEmoji) || '⭐';
         var x, y;
-        if (config.template === 'topdown') {
+        if (currentConfig && currentConfig.template === 'topdown') {
           // Spawn at random position on screen (not near edges)
           x = Phaser.Math.Between(60, W - 60);
           y = Phaser.Math.Between(60, H - 60);
@@ -284,7 +284,7 @@
         var W = window.innerWidth, H = window.innerHeight;
         var GROUND_Y = Math.floor(H * 0.78);
         var x, y;
-        if (config.template === 'topdown') {
+        if (currentConfig && currentConfig.template === 'topdown') {
           x = Phaser.Math.Between(60, W - 60);
           y = Phaser.Math.Between(60, H - 60);
         } else {
@@ -297,7 +297,7 @@
 
       // Call on collision. Returns true = game over, false = collision absorbed.
       handleCollision: function(scene, hitEnemyObj) {
-        var actions = config.actions || [];
+        var actions = (currentConfig && currentConfig.actions) || [];
         var st = ActionSystem.state;
 
         // Enemy-explode visual (flash the enemy object if provided)
