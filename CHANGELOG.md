@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-03-04
+
+### Fixed — Arrival gate prevents impossible-to-win scenarios
+
+`spawnOneEnemy()` now predicts each enemy's arrival time at the hero's x position.
+If the predicted arrival is < 950ms after the previous enemy's arrival, the spawn is
+silently skipped — including burst spawns. This makes it mathematically impossible
+to create a scenario where the player is landing from one jump when the next enemy arrives.
+
+**Physics basis:** Jump air time = `2 × 580 / 1400 = 0.830s`. Gate = 950ms (full jump + 120ms buffer).
+
+Also reduced speed jitter from `random(0, 40)` to `random(0, 15)` — enough to feel "alive",
+not enough for enemies to significantly catch up to each other. Fast-enemy 1.5× variant
+preserved; gate accounts for faster travel time correctly.
+
+---
+
 ## [0.8.0] - 2026-03-04
 
 ### Added — M8: Progression Mechanics

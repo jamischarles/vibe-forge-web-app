@@ -444,6 +444,7 @@
           this.jumpForce = config.jumpForce || 580;
           this.gravity = 1400;
           this.enemies = [];
+          this.lastArrivalTime = 0;  // arrival-gate: tracks predicted arrival of last spawned enemy
           this.useEnemySpr = config.enemySpriteId && this.textures.exists('enemy-spr');
 
           // Score + title text
@@ -484,8 +485,20 @@
         spawnOneEnemy(speed) {
           var groundY = GROUND_Y;
           var diff = (currentConfig && currentConfig.difficulty) || {};
-          var fastChance = diff.fastEnemyChance != null ? diff.fastEnemyChance : 0.15;
-          var speedMult  = Math.random() < fastChance ? 1.5 : 1.0;
+
+          // Determine actual speed first (needed for arrival prediction)
+          var fastChance  = diff.fastEnemyChance != null ? diff.fastEnemyChance : 0.15;
+          var speedMult   = Math.random() < fastChance ? 1.5 : 1.0;
+          var actualSpeed = speed * speedMult + Phaser.Math.Between(0, 15); // ±15 jitter keeps feel "alive"
+
+          // Arrival gate: ensure player ALWAYS has time to jump before next enemy arrives.
+          // Jump time = 2 × jumpForce / gravity = 2 × 580 / 1400 ≈ 0.83s.
+          // MIN_GAP = 950ms guarantees a full jump + 120ms buffer between any two arrivals.
+          var travelMs       = ((W + 40 - 120) / actualSpeed) * 1000; // time from spawn to hero x
+          var predictedArrival = this.time.now + travelMs;
+          if (predictedArrival - this.lastArrivalTime < 950) return; // skip — would be undodgeable
+          this.lastArrivalTime = predictedArrival;
+
           var enemy;
           if (this.useEnemySpr) {
             enemy = this.add.image(W + 40, groundY - 16, 'enemy-spr')
@@ -495,7 +508,7 @@
               fontSize: '48px', fontFamily: 'Arial'
             }).setOrigin(0.5, 1);
           }
-          enemy.velocityX = -(speed * speedMult + Phaser.Math.Between(0, 40));
+          enemy.velocityX = -actualSpeed;
           this.enemies.push(enemy);
         }
 
