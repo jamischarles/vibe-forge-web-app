@@ -524,7 +524,7 @@
           if (predictedArrival - this.lastArrivalTime < 950) return; // skip — would be undodgeable
           this.lastArrivalTime = predictedArrival;
 
-          // Roll for low obstacle (duck-required) vs normal (jump-required)
+          // Roll for low obstacle (duck-required, floats at head height) vs normal (jump-required)
           var lowChance = diff.lowObstacleChance != null ? diff.lowObstacleChance : 0;
           var isLow     = Math.random() < lowChance;
 
@@ -533,12 +533,15 @@
             enemy = this.add.image(W + 40, groundY - 16, 'enemy-spr')
               .setDisplaySize(48, 48).setOrigin(0.5, 1);
           } else {
-            var obstacleEmoji = isLow ? (diff.lowObstacleEmoji || '🪵') : config.enemyEmoji;
-            var obstacleY     = isLow ? (groundY - 50) : (groundY - 10);
+            // Low obstacles spawn at head-height (55px above ground) so they clearly float overhead.
+            // Default '🔥' looks like a floating hazard — AI overrides with themed emoji.
+            var obstacleEmoji = isLow ? (diff.lowObstacleEmoji || '🔥') : config.enemyEmoji;
+            var obstacleY     = isLow ? (groundY - 55) : (groundY - 10);
             enemy = this.add.text(W + 40, obstacleY, obstacleEmoji, {
               fontSize: '48px', fontFamily: 'Arial'
             }).setOrigin(0.5, 1);
           }
+          enemy.isLow = isLow; // tag for custom hitbox in collision loop
           enemy.velocityX = -actualSpeed;
           this.enemies.push(enemy);
         }
@@ -576,13 +579,17 @@
             var spawnMin   = diff.spawnMin   != null ? diff.spawnMin   : 900;  // floor ms
             var spawnBase  = Math.max(spawnMin, 2200 - (time / 1000) * spawnDecay);
             this.spawnInterval = Phaser.Math.Between(spawnBase * 0.75, spawnBase * 1.25);
-            this.spawnOneEnemy(speed);
+            // Baked-in speed ramp — always active, no config needed.
+            // +20px/s per 30 seconds, capped at +200px/s (~4.5× the default start speed).
+            var bakedRamp = Math.min(200, Math.floor(time / 30000) * 20);
+            var spawnSpeed = Math.min(600, speed + bakedRamp);
+            this.spawnOneEnemy(spawnSpeed);
             // Burst: occasional quick follow-up enemy breaks the rhythm further
             var burstChance = diff.burstChance != null ? diff.burstChance : 0.2;
             if (Math.random() < burstChance) {
               var self = this;
               this.time.delayedCall(Phaser.Math.Between(350, 600), function() {
-                if (!self.gameOver) self.spawnOneEnemy(speed);
+                if (!self.gameOver) self.spawnOneEnemy(spawnSpeed);
               });
             }
           }
@@ -601,7 +608,12 @@
               if (this.score % 10 === 0) this.sounds.score();
               continue;
             }
-            var eBox = { x: e.x - 16, y: e.y - 40, w: 32, h: 40 };
+            // Low obstacles use a fixed-world-Y hitbox at head height.
+            // eBox.bottom = GROUND_Y-44: standing hero top (GROUND_Y-54) hits it;
+            // ducking hero top (GROUND_Y-32) clears it. Normal enemies use e.y-relative box.
+            var eBox = e.isLow
+              ? { x: e.x - 22, y: GROUND_Y - 70, w: 44, h: 26 }  // bottom = GROUND_Y-44
+              : { x: e.x - 16, y: e.y - 40, w: 32, h: 40 };
             if (heroBox.x < eBox.x + eBox.w && heroBox.x + heroBox.w > eBox.x &&
                 heroBox.y < eBox.y + eBox.h && heroBox.y + heroBox.h > eBox.y) {
               if (ActionSystem.handleCollision(this, e)) { this.triggerGameOver(); return; }

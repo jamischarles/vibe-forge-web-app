@@ -67,9 +67,9 @@ Template examples:
 
 Vocabulary: detect these styles from the user's words and apply automatically:
 - "obstacle course", "obstacles", "hurdles", "hurdle", "parkour", "obstacle run" →
-    template: "runner", speed 260–300, ALWAYS include speed-ramp action, and set difficulty: { spawnDecay: 12, spawnMin: 750, burstChance: 0.3, fastEnemyChance: 0.2, lowObstacleChance: 0.3, lowObstacleEmoji: "🪨" }
+    template: "runner", speed 260–300, ALWAYS include speed-ramp action, and set difficulty: { spawnDecay: 12, spawnMin: 750, burstChance: 0.3, fastEnemyChance: 0.2, lowObstacleChance: 0.3, lowObstacleEmoji: "🔥" }
 - "duck", "ducking", "crouch", "crouching", "dodge", "slide", "sliding under" →
-    template: "runner", and set difficulty.lowObstacleChance: 0.3 (add low obstacles to duck under)
+    template: "runner", and set difficulty: { lowObstacleChance: 0.35, lowObstacleEmoji: "🔥" } (floating overhead hazard — NOT an animal emoji)
 - "collecting", "collector", "collect", "gathering", "pick up", "gatherer" →
     add collectible action with an emoji matching the theme (stars ⭐, coins 🪙, gems 💎, fish 🐟, etc.)
 - "top-down", "overhead", "arena", "dodge in all directions", "4 directions", "top down", "bird's eye", "maze" →
@@ -154,7 +154,7 @@ Difficulty update rules (update or add "difficulty" field):
 - "make it easier", "too hard", "fewer enemies" → decrease spawnDecay by ~4, increase spawnMin by ~200, decrease burstChance by 0.1
 - "make it more varied", "too repetitive", "more variety" → increase burstChance by 0.1, increase fastEnemyChance by 0.1
 - "reset difficulty", "normal difficulty" → remove difficulty field entirely (set to null/undefined)
-- "add duck obstacles", "add low obstacles", "add things to duck under", "add crouch mechanic", "add sliding obstacles" → set difficulty.lowObstacleChance: 0.3 (and lowObstacleEmoji matching theme, e.g. "🪵" "🪨" "⚡" "🔥")
+- "add duck obstacles", "add low obstacles", "add things to duck under", "add crouch mechanic", "add sliding obstacles" → set difficulty.lowObstacleChance: 0.3 (and lowObstacleEmoji matching theme — pick something that looks like an OVERHEAD hazard, NOT an animal: e.g. "🔥" fire wall, "⚡" lightning, "🏹" arrow, "🌿" low branch, "🪨" falling rock, "🔱" beam)
 - "remove duck obstacles", "remove low obstacles", "no duck" → set difficulty.lowObstacleChance: 0
 - Keep values in bounds: spawnDecay 2–20, spawnMin 500–1600, burstChance 0–0.4, fastEnemyChance 0–0.3, lowObstacleChance 0–0.6
 - Preserve existing difficulty values not mentioned
