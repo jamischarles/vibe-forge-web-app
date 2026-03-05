@@ -86,26 +86,29 @@ Vocabulary: detect these styles from the user's words and apply automatically:
 Shooter template rules (only when template === "shooter"):
 - Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed }
 - Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450
-- "paintball" theme → heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-concrete", backgroundColor: "#5a5a5a"
-- "outdoor paintball" theme → heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-grass-td", backgroundColor: "#3d6d30"
-- "laser tag" theme → heroEmoji: "🤖", enemyEmoji: "👾", bgId: "bg-metal", backgroundColor: "#1a2a3a"
-- "space battle" theme → heroEmoji: "🚀", enemyEmoji: "👽", bgId: "bg-space", backgroundColor: "#0a0a1e"
+- "paintball" theme → heroSpriteId: "hero-soldier", enemySpriteId: "enemy-guard", heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-concrete", backgroundColor: "#5a5a5a"
+- "outdoor paintball" theme → heroSpriteId: "hero-survivor", enemySpriteId: "enemy-guard", heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-grass-td", backgroundColor: "#3d6d30"
+- "laser tag" theme → heroSpriteId: "hero-trooper", enemySpriteId: "enemy-hitman", heroEmoji: "🤖", enemyEmoji: "👾", bgId: "bg-kenney-teal", backgroundColor: "#1a2a3a"
+- "zombie shooter" theme → heroSpriteId: "hero-soldier", enemySpriteId: "enemy-zombie", heroEmoji: "🧑", enemyEmoji: "🧟", bgId: "bg-kenney-dark", backgroundColor: "#1a1a1a"
+- "space battle" theme → heroSpriteId: "hero-astronaut", enemySpriteId: "enemy-alien", heroEmoji: "🚀", enemyEmoji: "👽", bgId: "bg-space", backgroundColor: "#0a0a1e"
 - "castle/knight" theme → heroSpriteId: "hero-knight", enemySpriteId: "enemy-dragon", bgId: "bg-dungeon"
 - "wood/indoor" theme → bgId: "bg-wood-floor", backgroundColor: "#6a4a1a"
-- "desert/sand" theme → bgId: "bg-sand-td", backgroundColor: "#9a7840"
+- "desert/sand" theme → heroSpriteId: "hero-survivor", bgId: "bg-kenney-sand", backgroundColor: "#9a7840"
 
 Background selection by template (IMPORTANT — pick bgId that matches the view):
-- Runner games (side-scrolling): use bg-sky, bg-forest, bg-desert, bg-space; NEVER use bg-concrete, bg-grass-td, bg-wood-floor, bg-metal, bg-sand-td
-- Top-Down + Shooter games (floor tiles): prefer bg-concrete (urban/indoor), bg-grass-td (outdoor), bg-dungeon (castle/fantasy), bg-metal (sci-fi), bg-sand-td (desert), bg-wood-floor (indoor/warm)
+- Runner games (side-scrolling): use bg-sky, bg-forest, bg-desert, bg-space; NEVER use bg-concrete, bg-grass-td, bg-wood-floor, bg-metal, bg-sand-td, bg-kenney-*
+- Top-Down + Shooter games (floor tiles): prefer bg-concrete (urban/indoor), bg-grass-td (outdoor), bg-dungeon (castle/fantasy), bg-metal (sci-fi), bg-sand-td (desert), bg-wood-floor (indoor/warm); also consider bg-kenney-grass (bright outdoor), bg-kenney-light (clean indoor), bg-kenney-dark (gritty/industrial), bg-kenney-teal (sci-fi/clean), bg-kenney-sand (warm/sandy)
 - bg-space works for any template
 
 Sprite + background combos:
 - "a knight fighting dragons" → heroSpriteId: "hero-knight", enemySpriteId: "enemy-dragon", bgId: "bg-dungeon"
 - "space explorer avoiding aliens" (runner) → heroSpriteId: "hero-astronaut", enemySpriteId: "enemy-alien", bgId: "bg-space"
-- "space shooter" → heroSpriteId: "hero-astronaut", enemySpriteId: "enemy-alien", bgId: "bg-metal", backgroundColor: "#0a1a2a"
+- "space shooter" → heroSpriteId: "hero-trooper", enemySpriteId: "enemy-alien", bgId: "bg-kenney-teal", backgroundColor: "#0a1a2a"
 - "a wizard dodging bats" → heroSpriteId: "hero-wizard", enemySpriteId: "enemy-bat", bgId: "bg-dungeon"
 - "a cat jumping over slimes" (runner) → heroSpriteId: "hero-cat", enemySpriteId: "enemy-slime", bgId: "bg-forest"
-- "robot shooter" → heroSpriteId: "hero-robot", bgId: "bg-concrete"
+- "robot shooter" → heroSpriteId: "hero-trooper", enemySpriteId: "enemy-hitman", bgId: "bg-kenney-dark"
+- "soldier shooter" / "military shooter" → heroSpriteId: "hero-soldier", enemySpriteId: "enemy-guard", bgId: "bg-kenney-dark"
+- "zombie survival shooter" → heroSpriteId: "hero-survivor", enemySpriteId: "enemy-zombie", bgId: "bg-kenney-dark"
 - "a 🐸 frog" → no sprite match; omit sprite fields, use frog emoji
 
 Difficulty (optional "difficulty" field — omit entirely for normal games):
@@ -153,7 +156,13 @@ Speed rules (range is 180–600):
 Sprite rules:
 - "use the knight sprite" or "make the hero a knight" → set heroSpriteId: "hero-knight"
 - "use a dragon enemy" → set enemySpriteId: "enemy-dragon"
+- "make the hero a soldier" → set heroSpriteId: "hero-soldier"
+- "make enemies zombies" → set enemySpriteId: "enemy-zombie"
+- "make the hero a robot" or "trooper" → set heroSpriteId: "hero-trooper"
+- "make enemies hitmen" or "assassins" → set enemySpriteId: "enemy-hitman"
 - "add a space background" or "use the starfield" → set bgId: "bg-space"
+- "dark floor" or "industrial floor" → set bgId: "bg-kenney-dark"
+- "teal floor" or "sci-fi floor" → set bgId: "bg-kenney-teal"
 - "remove the sprite" or "use emoji" or "go back to emoji" → omit/null the relevant sprite field
 - When changing heroEmoji, also clear heroSpriteId (set to null) if the new emoji doesn't match the old sprite
 - When changing enemyEmoji, also clear enemySpriteId (set to null) if the new emoji doesn't match the old sprite

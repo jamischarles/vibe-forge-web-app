@@ -13,7 +13,7 @@ export interface CharacterAsset {
   name: string
   role: 'hero' | 'enemy'
   tags: string[]
-  url: string   // served from /public/assets/characters/{id}.svg
+  url: string   // served from /public/assets/characters/{id}.svg or .png
 }
 
 export interface BackgroundAsset {
@@ -62,6 +62,42 @@ export const HERO_SPRITES: CharacterAsset[] = [
     tags: ['space', 'sci-fi', 'explorer', 'galaxy'],
     url: '/assets/characters/hero-astronaut.svg',
   },
+  // ── Kenney top-down shooter characters (CC0, PNG, overhead view) ─────────────
+  {
+    id: 'hero-blue',
+    name: 'Blue Guy',
+    role: 'hero',
+    tags: ['human', 'casual', 'modern', 'shooter', 'topdown'],
+    url: '/assets/characters/hero-blue.png',
+  },
+  {
+    id: 'hero-soldier',
+    name: 'Soldier',
+    role: 'hero',
+    tags: ['military', 'warrior', 'tactical', 'shooter', 'topdown'],
+    url: '/assets/characters/hero-soldier.png',
+  },
+  {
+    id: 'hero-survivor',
+    name: 'Survivor',
+    role: 'hero',
+    tags: ['human', 'casual', 'survivor', 'shooter', 'topdown'],
+    url: '/assets/characters/hero-survivor.png',
+  },
+  {
+    id: 'hero-woman',
+    name: 'Green Woman',
+    role: 'hero',
+    tags: ['human', 'female', 'casual', 'shooter', 'topdown'],
+    url: '/assets/characters/hero-woman.png',
+  },
+  {
+    id: 'hero-trooper',
+    name: 'Trooper',
+    role: 'hero',
+    tags: ['sci-fi', 'robot', 'machine', 'tech', 'shooter', 'topdown'],
+    url: '/assets/characters/hero-trooper.png',
+  },
 ]
 
 // ── Enemy character sprites ───────────────────────────────────────────────────
@@ -101,6 +137,35 @@ export const ENEMY_SPRITES: CharacterAsset[] = [
     role: 'enemy',
     tags: ['gooey', 'blob', 'weird', 'bouncy'],
     url: '/assets/characters/enemy-slime.svg',
+  },
+  // ── Kenney top-down shooter enemies (CC0, PNG, overhead view) ────────────────
+  {
+    id: 'enemy-zombie',
+    name: 'Zombie',
+    role: 'enemy',
+    tags: ['horror', 'undead', 'monster', 'scary', 'shooter', 'topdown'],
+    url: '/assets/characters/enemy-zombie.png',
+  },
+  {
+    id: 'enemy-hitman',
+    name: 'Hitman',
+    role: 'enemy',
+    tags: ['human', 'villain', 'dark', 'shooter', 'topdown'],
+    url: '/assets/characters/enemy-hitman.png',
+  },
+  {
+    id: 'enemy-elder',
+    name: 'Elder',
+    role: 'enemy',
+    tags: ['human', 'elder', 'civilian', 'shooter', 'topdown'],
+    url: '/assets/characters/enemy-elder.png',
+  },
+  {
+    id: 'enemy-guard',
+    name: 'Guard',
+    role: 'enemy',
+    tags: ['human', 'soldier', 'military', 'guard', 'shooter', 'topdown'],
+    url: '/assets/characters/enemy-guard.png',
   },
 ]
 
@@ -170,6 +235,42 @@ export const BG_ASSETS: BackgroundAsset[] = [
     name: 'Sandy Ground',
     tags: ['outdoor', 'arid', 'desert', 'sandy', 'topdown', 'shooter'],
     url: '/assets/backgrounds/bg-sand-td.svg',
+    fallbackColor: '#c4a255',
+  },
+  // ── Kenney top-down floor tiles (CC0, PNG, 64×64 tileable) ──────────────────
+  {
+    id: 'bg-kenney-grass',
+    name: 'Grass (Kenney)',
+    tags: ['outdoor', 'nature', 'green', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-kenney-grass.png',
+    fallbackColor: '#5a8a3a',
+  },
+  {
+    id: 'bg-kenney-light',
+    name: 'Light Floor (Kenney)',
+    tags: ['indoor', 'clean', 'bright', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-kenney-light.png',
+    fallbackColor: '#f0ede8',
+  },
+  {
+    id: 'bg-kenney-dark',
+    name: 'Dark Floor (Kenney)',
+    tags: ['indoor', 'dark', 'industrial', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-kenney-dark.png',
+    fallbackColor: '#4a4a4a',
+  },
+  {
+    id: 'bg-kenney-teal',
+    name: 'Teal Floor (Kenney)',
+    tags: ['indoor', 'sci-fi', 'clean', 'cool', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-kenney-teal.png',
+    fallbackColor: '#7ab8b8',
+  },
+  {
+    id: 'bg-kenney-sand',
+    name: 'Sandy Floor (Kenney)',
+    tags: ['outdoor', 'warm', 'desert', 'sandy', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-kenney-sand.png',
     fallbackColor: '#c4a255',
   },
   // ── Universal (works for any template) ──────────────────────────────────────
