@@ -86,16 +86,26 @@ Vocabulary: detect these styles from the user's words and apply automatically:
 Shooter template rules (only when template === "shooter"):
 - Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed }
 - Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450
-- "paintball" theme → heroEmoji: "🧑", enemyEmoji: "🎭", backgroundColor: "#2d4a2d"
-- "laser tag" theme → heroEmoji: "🤖", enemyEmoji: "👾", backgroundColor: "#1a0a2e"
-- "space battle" theme → heroEmoji: "🚀", enemyEmoji: "👽", bgId: "bg-space"
+- "paintball" theme → heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-concrete", backgroundColor: "#5a5a5a"
+- "outdoor paintball" theme → heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-grass-td", backgroundColor: "#3d6d30"
+- "laser tag" theme → heroEmoji: "🤖", enemyEmoji: "👾", bgId: "bg-metal", backgroundColor: "#1a2a3a"
+- "space battle" theme → heroEmoji: "🚀", enemyEmoji: "👽", bgId: "bg-space", backgroundColor: "#0a0a1e"
 - "castle/knight" theme → heroSpriteId: "hero-knight", enemySpriteId: "enemy-dragon", bgId: "bg-dungeon"
+- "wood/indoor" theme → bgId: "bg-wood-floor", backgroundColor: "#6a4a1a"
+- "desert/sand" theme → bgId: "bg-sand-td", backgroundColor: "#9a7840"
 
-Sprite selection examples:
+Background selection by template (IMPORTANT — pick bgId that matches the view):
+- Runner games (side-scrolling): use bg-sky, bg-forest, bg-desert, bg-space; NEVER use bg-concrete, bg-grass-td, bg-wood-floor, bg-metal, bg-sand-td
+- Top-Down + Shooter games (floor tiles): prefer bg-concrete (urban/indoor), bg-grass-td (outdoor), bg-dungeon (castle/fantasy), bg-metal (sci-fi), bg-sand-td (desert), bg-wood-floor (indoor/warm)
+- bg-space works for any template
+
+Sprite + background combos:
 - "a knight fighting dragons" → heroSpriteId: "hero-knight", enemySpriteId: "enemy-dragon", bgId: "bg-dungeon"
-- "space explorer avoiding aliens" → heroSpriteId: "hero-astronaut", enemySpriteId: "enemy-alien", bgId: "bg-space"
+- "space explorer avoiding aliens" (runner) → heroSpriteId: "hero-astronaut", enemySpriteId: "enemy-alien", bgId: "bg-space"
+- "space shooter" → heroSpriteId: "hero-astronaut", enemySpriteId: "enemy-alien", bgId: "bg-metal", backgroundColor: "#0a1a2a"
 - "a wizard dodging bats" → heroSpriteId: "hero-wizard", enemySpriteId: "enemy-bat", bgId: "bg-dungeon"
-- "a cat jumping over slimes" → heroSpriteId: "hero-cat", enemySpriteId: "enemy-slime", bgId: "bg-forest"
+- "a cat jumping over slimes" (runner) → heroSpriteId: "hero-cat", enemySpriteId: "enemy-slime", bgId: "bg-forest"
+- "robot shooter" → heroSpriteId: "hero-robot", bgId: "bg-concrete"
 - "a 🐸 frog" → no sprite match; omit sprite fields, use frog emoji
 
 Difficulty (optional "difficulty" field — omit entirely for normal games):

@@ -107,6 +107,7 @@ export const ENEMY_SPRITES: CharacterAsset[] = [
 // ── Background tiles ──────────────────────────────────────────────────────────
 
 export const BG_ASSETS: BackgroundAsset[] = [
+  // ── Side-scrolling (runner-optimized) ───────────────────────────────────────
   {
     id: 'bg-sky',
     name: 'Blue Sky',
@@ -115,32 +116,69 @@ export const BG_ASSETS: BackgroundAsset[] = [
     fallbackColor: '#87CEEB',
   },
   {
-    id: 'bg-space',
-    name: 'Starfield',
-    tags: ['space', 'night', 'sci-fi', 'dark'],
-    url: '/assets/backgrounds/bg-space.svg',
-    fallbackColor: '#0a0a2e',
-  },
-  {
-    id: 'bg-dungeon',
-    name: 'Dungeon',
-    tags: ['dark', 'fantasy', 'underground', 'cave'],
-    url: '/assets/backgrounds/bg-dungeon.svg',
-    fallbackColor: '#2a1f2a',
-  },
-  {
     id: 'bg-forest',
     name: 'Forest',
-    tags: ['nature', 'green', 'trees', 'outdoor'],
+    tags: ['nature', 'green', 'trees', 'outdoor', 'runner'],
     url: '/assets/backgrounds/bg-forest.svg',
     fallbackColor: '#2d5a1b',
   },
   {
     id: 'bg-desert',
-    name: 'Desert',
-    tags: ['arid', 'sand', 'hot', 'topdown'],
+    name: 'Desert (Side)',
+    tags: ['arid', 'sand', 'hot', 'runner'],
     url: '/assets/backgrounds/bg-desert.svg',
     fallbackColor: '#c4a25a',
+  },
+  // ── Top-down / Shooter floor tiles ──────────────────────────────────────────
+  {
+    id: 'bg-concrete',
+    name: 'Concrete Floor',
+    tags: ['indoor', 'industrial', 'urban', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-concrete.svg',
+    fallbackColor: '#787878',
+  },
+  {
+    id: 'bg-grass-td',
+    name: 'Grass Field',
+    tags: ['outdoor', 'nature', 'green', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-grass-td.svg',
+    fallbackColor: '#4a7a3a',
+  },
+  {
+    id: 'bg-dungeon',
+    name: 'Stone Floor',
+    tags: ['dark', 'fantasy', 'underground', 'cave', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-dungeon.svg',
+    fallbackColor: '#2a1f2a',
+  },
+  {
+    id: 'bg-wood-floor',
+    name: 'Wood Floor',
+    tags: ['indoor', 'warm', 'cozy', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-wood-floor.svg',
+    fallbackColor: '#8b6327',
+  },
+  {
+    id: 'bg-metal',
+    name: 'Metal Floor',
+    tags: ['sci-fi', 'industrial', 'space', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-metal.svg',
+    fallbackColor: '#3a4a5a',
+  },
+  {
+    id: 'bg-sand-td',
+    name: 'Sandy Ground',
+    tags: ['outdoor', 'arid', 'desert', 'sandy', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-sand-td.svg',
+    fallbackColor: '#c4a255',
+  },
+  // ── Universal (works for any template) ──────────────────────────────────────
+  {
+    id: 'bg-space',
+    name: 'Starfield',
+    tags: ['space', 'night', 'sci-fi', 'dark', 'runner', 'topdown', 'shooter'],
+    url: '/assets/backgrounds/bg-space.svg',
+    fallbackColor: '#0a0a2e',
   },
 ]
 

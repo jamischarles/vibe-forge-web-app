@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Base concrete -->
+  <rect width="256" height="256" fill="#787878"/>
+  <!-- Tile shade variants (4x4 grid of 64px tiles) -->
+  <rect x="0"   y="0"   width="64" height="64" fill="#747474"/>
+  <rect x="128" y="0"   width="64" height="64" fill="#7c7c7c"/>
+  <rect x="64"  y="64"  width="64" height="64" fill="#747474"/>
+  <rect x="192" y="64"  width="64" height="64" fill="#7c7c7c"/>
+  <rect x="0"   y="128" width="64" height="64" fill="#7c7c7c"/>
+  <rect x="128" y="128" width="64" height="64" fill="#747474"/>
+  <rect x="64"  y="192" width="64" height="64" fill="#7c7c7c"/>
+  <rect x="192" y="192" width="64" height="64" fill="#747474"/>
+  <!-- Tile grid lines (horizontal) -->
+  <line x1="0" y1="64"  x2="256" y2="64"  stroke="#606060" stroke-width="1.5"/>
+  <line x1="0" y1="128" x2="256" y2="128" stroke="#606060" stroke-width="1.5"/>
+  <line x1="0" y1="192" x2="256" y2="192" stroke="#606060" stroke-width="1.5"/>
+  <!-- Tile grid lines (vertical) -->
+  <line x1="64"  y1="0" x2="64"  y2="256" stroke="#606060" stroke-width="1.5"/>
+  <line x1="128" y1="0" x2="128" y2="256" stroke="#606060" stroke-width="1.5"/>
+  <line x1="192" y1="0" x2="192" y2="256" stroke="#606060" stroke-width="1.5"/>
+  <!-- Micro-cracks -->
+  <path d="M 22 18 Q 28 22 32 20 Q 36 18 38 24" fill="none" stroke="#686868" stroke-width="1" opacity="0.7"/>
+  <path d="M 90 88 Q 96 92 100 89" fill="none" stroke="#686868" stroke-width="1" opacity="0.6"/>
+  <path d="M 155 45 Q 160 50 158 56 Q 156 60 162 63" fill="none" stroke="#686868" stroke-width="1" opacity="0.7"/>
+  <path d="M 210 170 Q 218 174 220 180" fill="none" stroke="#686868" stroke-width="1" opacity="0.6"/>
+  <path d="M 38 200 Q 44 205 42 212" fill="none" stroke="#686868" stroke-width="1" opacity="0.5"/>
+  <!-- Corner rivets/marks at grid intersections -->
+  <circle cx="64"  cy="64"  r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="128" cy="64"  r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="192" cy="64"  r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="64"  cy="128" r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="128" cy="128" r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="192" cy="128" r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="64"  cy="192" r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="128" cy="192" r="2.5" fill="#909090" opacity="0.6"/>
+  <circle cx="192" cy="192" r="2.5" fill="#909090" opacity="0.6"/>
+</svg>
