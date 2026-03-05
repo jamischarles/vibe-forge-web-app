@@ -33,10 +33,12 @@ export interface GameAction {
 }
 
 export interface GameDifficulty {
-  spawnDecay?: number       // ms/sec the spawn interval shrinks (runner default: 8, topdown: 12)
-  spawnMin?: number         // minimum spawn interval in ms (runner: 900, topdown: 600)
-  burstChance?: number      // 0–1, chance of a burst follow-up spawn after each enemy (runner: 0.2)
-  fastEnemyChance?: number  // 0–1, chance of an enemy moving 1.5× faster (runner: 0.15)
+  spawnDecay?: number         // ms/sec the spawn interval shrinks (runner default: 8, topdown: 12)
+  spawnMin?: number           // minimum spawn interval in ms (runner: 900, topdown: 600)
+  burstChance?: number        // 0–1, chance of a burst follow-up spawn after each enemy (runner: 0.2)
+  fastEnemyChance?: number    // 0–1, chance of an enemy moving 1.5× faster (runner: 0.15)
+  lowObstacleChance?: number  // 0–1, fraction of spawns that are low (duck-required) obstacles (runner only)
+  lowObstacleEmoji?: string   // emoji for low obstacles, default '🪵'
 }
 
 export interface GameConfig {

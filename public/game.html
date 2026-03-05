@@ -441,6 +441,7 @@
           this.heroVelocityY = 0;
           this.isJumping = false;
           this.wasJumping = false;
+          this.isDucking = false;
           this.jumpForce = config.jumpForce || 580;
           this.gravity = 1400;
           this.enemies = [];
@@ -456,12 +457,23 @@
             fontSize: '22px', color: '#fff', stroke: '#000', strokeThickness: 4,
           });
 
-          // Input
+          // Input — keyboard
           this.input.keyboard.on('keydown-SPACE', () => this.doJump());
-          this.input.on('pointerdown', () => this.doJump());
+          this.input.keyboard.on('keydown-UP',    () => this.doJump());
+          this.input.keyboard.on('keydown-DOWN',  () => this.startDuck());
+          this.input.keyboard.on('keyup-DOWN',    () => this.stopDuck());
+
+          // Input — pointer: top half = jump, bottom half = duck (split-screen)
+          var self = this;
+          this.input.on('pointerdown', function(ptr) {
+            if (self.gameOver) { self.scene.restart(); return; }
+            if (ptr.y < H / 2) self.doJump();
+            else                self.startDuck();
+          });
+          this.input.on('pointerup', function() { self.stopDuck(); });
 
           // Start hint
-          this.startMsg = this.add.text(W / 2, GROUND_Y * 0.5, 'SPACE or Tap to Jump!', {
+          this.startMsg = this.add.text(W / 2, GROUND_Y * 0.5, '⬆ SPACE / tap top to jump  ⬇ DOWN / tap bottom to duck', {
             fontSize: '28px', color: '#fff', stroke: '#000', strokeThickness: 5,
             backgroundColor: '#0008', padding: { x: 16, y: 8 },
           }).setOrigin(0.5).setDepth(10);
@@ -475,11 +487,24 @@
 
         doJump() {
           if (this.gameOver) { this.scene.restart(); return; }
+          if (this.isDucking) return; // can't jump while ducking
           if (!this.isJumping) {
             this.heroVelocityY = -(this.jumpForce);
             this.isJumping = true;
             this.sounds.jump();
           }
+        }
+
+        startDuck() {
+          if (this.isDucking || this.isJumping) return; // can't duck mid-air
+          this.isDucking = true;
+          this.hero.setScale(1, 0.5);
+        }
+
+        stopDuck() {
+          if (!this.isDucking) return;
+          this.isDucking = false;
+          this.hero.setScale(1, 1);
         }
 
         spawnOneEnemy(speed) {
@@ -499,12 +524,18 @@
           if (predictedArrival - this.lastArrivalTime < 950) return; // skip — would be undodgeable
           this.lastArrivalTime = predictedArrival;
 
+          // Roll for low obstacle (duck-required) vs normal (jump-required)
+          var lowChance = diff.lowObstacleChance != null ? diff.lowObstacleChance : 0;
+          var isLow     = Math.random() < lowChance;
+
           var enemy;
-          if (this.useEnemySpr) {
+          if (!isLow && this.useEnemySpr) {
             enemy = this.add.image(W + 40, groundY - 16, 'enemy-spr')
               .setDisplaySize(48, 48).setOrigin(0.5, 1);
           } else {
-            enemy = this.add.text(W + 40, groundY - 10, config.enemyEmoji, {
+            var obstacleEmoji = isLow ? (diff.lowObstacleEmoji || '🪵') : config.enemyEmoji;
+            var obstacleY     = isLow ? (groundY - 50) : (groundY - 10);
+            enemy = this.add.text(W + 40, obstacleY, obstacleEmoji, {
               fontSize: '48px', fontFamily: 'Arial'
             }).setOrigin(0.5, 1);
           }
@@ -557,7 +588,9 @@
           }
 
           // Move enemies + collision
-          var heroBox = { x: this.hero.x - 18, y: this.hero.y - 44, w: 36, h: 44 };
+          var heroBox = this.isDucking
+            ? { x: this.hero.x - 20, y: this.hero.y - 22, w: 40, h: 22 }
+            : { x: this.hero.x - 18, y: this.hero.y - 44, w: 36, h: 44 };
           for (var i = this.enemies.length - 1; i >= 0; i--) {
             var e = this.enemies[i];
             e.x += e.velocityX * dt;

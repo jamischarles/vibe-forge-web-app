@@ -1,6 +1,6 @@
 # Kids Game Builder — Feature Registry
 
-_Current version: **v0.8.0** | Production: https://kids-game-builder.vercel.app_
+_Current version: **v0.9.0** | Production: https://kids-game-builder.vercel.app_
 
 ## Legend
 ✅ Implemented &nbsp; 🚧 In Progress &nbsp; ⏳ Planned &nbsp; ❌ Dropped
@@ -125,6 +125,22 @@ _Current version: **v0.8.0** | Production: https://kids-game-builder.vercel.app_
 | ✅ | `GAME_READY` emitted after 500ms on successful LOAD_CODE execution | `public/game.html` |
 | ✅ | `window.addEventListener('message')` in parent — updates `gameReady` / `gameError` state | `app/page.tsx` |
 | ✅ | 3-state badge: ⏳ Loading (gray) → 🎮/🕹️ Playing! (green/orange) → ⚠️ Error (red) | `app/page.tsx` |
+
+---
+
+## M9 — Duck Mechanic + Low Obstacles (v0.9.0)
+
+| Status | Feature | Key Files |
+|--------|---------|-----------|
+| ✅ | Duck mechanic: DOWN arrow or tap bottom-half → hero squishes to half height | `public/game.html` (startDuck, stopDuck) |
+| ✅ | Duck hitbox: 22px tall (vs 44px standing) — verified safe under low obstacles | `public/game.html` (heroBox conditional) |
+| ✅ | Can't duck mid-air; can't jump while ducking | `public/game.html` (startDuck guard, doJump guard) |
+| ✅ | Split-screen mobile: tap top → jump, tap bottom → duck | `public/game.html` (pointerdown handler) |
+| ✅ | Low obstacles: spawn at `GROUND_Y - 50`, require ducking to avoid | `public/game.html` (spawnOneEnemy) |
+| ✅ | `difficulty.lowObstacleChance` + `difficulty.lowObstacleEmoji` fields | `lib/types.ts` (GameDifficulty) |
+| ✅ | AI CREATE: "duck", "crouch", "obstacle course" → applies `lowObstacleChance: 0.3` | `lib/ai.ts` (CREATE_SYSTEM_PROMPT) |
+| ✅ | AI UPDATE: "add duck obstacles" / "remove duck obstacles" rules | `lib/ai.ts` (UPDATE_SYSTEM_PROMPT) |
+| ✅ | Style chip "🦆 Add Duck Obstacles" for runner games without low obstacles | `app/page.tsx` (styleChips) |
 
 ---
 

@@ -751,6 +751,7 @@ export default function Home() {
   const styleChips: { label: string; prompt: string }[] = (() => {
     if (!gameReady || gameMode !== 'config') return []
     const isTopDown = currentConfig?.template === 'topdown'
+    const hasDuckObstacles = (currentConfig?.difficulty?.lowObstacleChance ?? 0) > 0
     if (isTopDown) {
       return [
         { label: '🏃 Go Runner',       prompt: 'switch to a side-scrolling runner game' },
@@ -758,11 +759,15 @@ export default function Home() {
         { label: '💀 More Enemies',    prompt: 'make enemies spawn faster and more often' },
       ]
     } else {
-      return [
+      const runnerChips: { label: string; prompt: string }[] = [
         { label: '🎯 Go Top-Down',     prompt: 'switch to a top-down overhead game' },
         { label: '⭐ Add Collectibles', prompt: 'add collectibles to pick up for bonus points' },
         { label: '🧗 Harder/Faster',   prompt: 'make it harder and faster with more obstacles' },
       ]
+      if (!hasDuckObstacles) {
+        runnerChips.push({ label: '🦆 Add Duck Obstacles', prompt: 'add low obstacles that require ducking' })
+      }
+      return runnerChips
     }
   })()
 
@@ -826,7 +831,7 @@ export default function Home() {
               <h1 className="text-lg font-bold text-white leading-tight">Game Maker</h1>
               <p className="text-xs text-gray-400 truncate">{subtitle}</p>
             </div>
-            <span className="text-[10px] text-gray-600 font-mono shrink-0 select-none">v0.8.1</span>
+            <span className="text-[10px] text-gray-600 font-mono shrink-0 select-none">v0.9.0</span>
           </div>
 
           {/* Tab bar — desktop only; mobile uses bottom nav */}

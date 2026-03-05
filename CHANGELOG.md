@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-03-04
+
+### Added — M9: Duck Mechanic + Low Obstacles
+
+**Duck mechanic (runner template):**
+- Press **DOWN arrow** or **tap the bottom half** of the screen to duck; release to stand
+- Hero squishes to half height (`setScale(1, 0.5)`) while ducking
+- Ducking is blocked mid-air; jumping is blocked while ducking
+- Ducking hitbox: 22px tall (vs 44px standing) — mathematically verified safe under low obstacles
+
+**Low obstacles (runner template):**
+- New `difficulty.lowObstacleChance` (0–1) controls what fraction of spawns are low obstacles
+- New `difficulty.lowObstacleEmoji` sets the emoji for low obstacles (default `🪵`)
+- Low obstacles spawn at `GROUND_Y - 50` — standing hero is HIT, ducking hero is SAFE
+- Same arrival gate applies — low obstacles never create impossible scenarios
+- AI vocabulary: "duck", "crouch", "slide", "obstacle course" → auto-applies `lowObstacleChance: 0.3`
+- Update prompt: "add duck obstacles" / "remove duck obstacles" rules added
+
+**UI:**
+- Start hint updated: shows both jump and duck key hints
+- Style chips: "🦆 Add Duck Obstacles" chip appears for runner games without low obstacles
+- Version badge: v0.9.0
+
+**Physics math (verified):**
+- Standing hero hitbox top = `GROUND_Y − 54` → clips low obstacle bottom (`GROUND_Y − 50`) → HIT ✓
+- Ducking hero hitbox top = `GROUND_Y − 32` → clears low obstacle bottom → SAFE ✓
+- Jumping hero at peak (120px) → clears low obstacle top (`GROUND_Y − 90`) → SAFE ✓
+
+---
+
 ## [0.8.1] - 2026-03-04
 
 ### Fixed — Arrival gate prevents impossible-to-win scenarios
