@@ -146,7 +146,7 @@ function ShooterSettingsSection({ shooter, onChange, onTarget }: {
       <SettingsRow icon="🔫" label="Fire Speed"
         onTarget={() => onTarget('change fire speed ')}>
         <div className="flex bg-gray-700 rounded-xl p-0.5 gap-0.5">
-          {([{label:'Slow',v:800},{label:'Normal',v:500},{label:'Fast',v:250}] as const).map(p => (
+          {([{label:'Slow',v:800},{label:'Normal',v:500},{label:'Fast',v:200},{label:'Rapid',v:100}] as const).map(p => (
             <button key={p.label} onClick={() => upd('fireRate', p.v)}
               className={`flex-1 py-1 text-xs font-medium rounded-lg transition-all ${
                 (s.fireRate ?? 500) === p.v ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-gray-200'

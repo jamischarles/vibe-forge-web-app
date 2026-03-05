@@ -912,6 +912,22 @@
             this.add.tileSprite(W/2, H/2, W, H, 'bg-tile').setOrigin(0.5).setDepth(-2);
           } else {
             this.cameras.main.setBackgroundColor(config.backgroundColor || '#2d4a2d');
+            // Subtle checkerboard floor — alternating tiles +22 brightness
+            var tileSize = 56;
+            var floorG = this.add.graphics().setDepth(-1);
+            var bgRaw = (config.backgroundColor || '#2d4a2d').replace('#','');
+            while (bgRaw.length < 6) bgRaw = '0' + bgRaw;
+            var fr=parseInt(bgRaw.slice(0,2),16), fgg=parseInt(bgRaw.slice(2,4),16), fbb=parseInt(bgRaw.slice(4,6),16);
+            var fr2=Math.min(255,fr+22), fg2=Math.min(255,fgg+22), fb2=Math.min(255,fbb+22);
+            var altColor=(fr2<<16)|(fg2<<8)|fb2;
+            for (var ty=0; ty<H; ty+=tileSize) {
+              for (var tx=0; tx<W; tx+=tileSize) {
+                if ((Math.floor(tx/tileSize)+Math.floor(ty/tileSize))%2===0) {
+                  floorG.fillStyle(altColor,1);
+                  floorG.fillRect(tx,ty,tileSize,tileSize);
+                }
+              }
+            }
           }
           // Arena border
           this.add.rectangle(W/2, H/2, W-8, H-8, 0xffffff, 0).setStrokeStyle(3, 0xffffff, 0.2).setDepth(0);
@@ -938,6 +954,9 @@
           }
           this.useHeroSpr  = useHeroSpr;
           this.useEnemySpr = config.enemySpriteId && this.textures.exists('enemy-spr');
+
+          // ── Gun aim indicator (yellow dot, rendered above hero) ──────────────
+          this.heroGunIndicator = this.add.graphics().setDepth(6);
 
           // ── HP HUD ───────────────────────────────────────────────────────────
           this.hpObjs = [];
@@ -1311,6 +1330,8 @@
               if (e.y > e.patrolZone.y + e.patrolZone.h - 20) e.patrolDir = -1;
               if (e.y < e.patrolZone.y + 20)                  e.patrolDir =  1;
             }
+            var patRes = this.resolveWallCollision(e.x, e.y, ENEMY_RADIUS);
+            e.x = patRes.x; e.y = patRes.y;
             if (los && dist < 280) e.state = 'alert';
 
           } else if (e.state === 'alert') {
@@ -1413,6 +1434,24 @@
 
           this.updateDifficultyRamp(delta);
 
+          // ── Aim direction: always track toward mouse/pointer ─────────────────
+          var aimPtr = this.input.activePointer;
+          if (aimPtr && (aimPtr.x > 0 || aimPtr.y > 0)) {
+            var adx = aimPtr.x - this.heroX;
+            var ady = aimPtr.y - this.heroY;
+            var al  = Math.sqrt(adx*adx + ady*ady);
+            if (al > 5) { this.lastFacingX = adx/al; this.lastFacingY = ady/al; }
+          }
+          // Rotate hero sprite/emoji to face aim direction
+          var aimAngle = Math.atan2(this.lastFacingY, this.lastFacingX);
+          this.heroObj.setRotation(aimAngle);
+          // Draw yellow gun-tip indicator dot
+          this.heroGunIndicator.clear();
+          this.heroGunIndicator.fillStyle(0xffdd00, 0.9);
+          this.heroGunIndicator.fillCircle(
+            this.heroX + this.lastFacingX * 26,
+            this.heroY + this.lastFacingY * 26, 4);
+
           // Hero movement
           var vx = 0, vy = 0;
           if (this.cursors.left.isDown  || this.wasd.A.isDown) vx = -1;
@@ -1427,7 +1466,10 @@
             if (pdist > 12) { vx = pdx/pdist; vy = pdy/pdist; }
           }
           if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
-          if (vx !== 0 || vy !== 0) { this.lastFacingX = vx; this.lastFacingY = vy; }
+          // Note: lastFacingX/Y is set from pointer above; fallback for keyboard-only
+          if ((vx !== 0 || vy !== 0) && (!aimPtr || (aimPtr.x === 0 && aimPtr.y === 0))) {
+            this.lastFacingX = vx; this.lastFacingY = vy;
+          }
 
           var newHX = this.heroX + vx * HERO_SPEED * dt;
           var newHY = this.heroY + vy * HERO_SPEED * dt;
@@ -1472,7 +1514,9 @@
           } else {
             this.heroObj.setText('💥');
           }
-          // Clean up all bullets
+          // Clean up gun indicator + all bullets
+          if (this.heroGunIndicator) this.heroGunIndicator.destroy();
+          this.heroObj.setRotation(0);
           this.bullets.forEach(function(b) { if (b.obj.active) b.obj.destroy(); });
           this.bullets = [];
 

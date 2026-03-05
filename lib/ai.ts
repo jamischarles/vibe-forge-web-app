@@ -158,7 +158,8 @@ Other rules:
 Shooter template update rules (only when template === "shooter"):
 - "more walls", "more cover", "more obstacles" → increase shooter.wallCount by 2 (max 16)
 - "fewer walls", "open arena" → decrease shooter.wallCount by 2 (min 2)
-- "faster shooting", "rapid fire" → set shooter.fireRate: 250
+- "faster shooting" → set shooter.fireRate: 200
+- "rapid fire", "very fast fire" → set shooter.fireRate: 100
 - "slower shooting" → set shooter.fireRate: 800
 - "tougher enemies", "harder enemies" → increase shooter.enemyHp by 1 (max 4)
 - "easier enemies", "easier" → set shooter.enemyFireRate: 3000
@@ -252,7 +253,7 @@ export async function generateGameConfig(
       if (s.wallCount       != null) s.wallCount       = Math.max(2,   Math.min(16,   s.wallCount))
       if (s.heroHp          != null) s.heroHp           = Math.max(1,   Math.min(5,    s.heroHp))
       if (s.enemyHp         != null) s.enemyHp          = Math.max(1,   Math.min(4,    s.enemyHp))
-      if (s.fireRate        != null) s.fireRate         = Math.max(200, Math.min(1200, s.fireRate))
+      if (s.fireRate        != null) s.fireRate         = Math.max(80,  Math.min(1200, s.fireRate))
       if (s.enemyFireRate   != null) s.enemyFireRate    = Math.max(800, Math.min(4000, s.enemyFireRate))
       if (s.maxEnemies      != null) s.maxEnemies       = Math.max(2,   Math.min(8,    s.maxEnemies))
       if (s.projectileSpeed != null) s.projectileSpeed  = Math.max(200, Math.min(700,  s.projectileSpeed))
