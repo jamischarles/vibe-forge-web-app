@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, Gamepad2, Sparkles, RefreshCw, MessageSquare, Settings, Code2 } from 'lucide-react'
-import { GameConfig, GameDifficulty, GameAction, SPEED_MIN, SPEED_MAX } from '@/lib/types'
+import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED_MAX } from '@/lib/types'
 import { HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS, CharacterAsset, BackgroundAsset } from '@/lib/assets'
 
 type AppState = 'idle' | 'listening' | 'thinking' | 'playing'
@@ -75,16 +75,15 @@ function ColorInput({ hex, onChange }: { hex: string; onChange: (v: string) => v
 }
 
 function TemplateToggle({ value, onChange }: {
-  value: 'runner' | 'topdown'
-  onChange: (v: 'runner' | 'topdown') => void
+  value: 'runner' | 'topdown' | 'shooter'
+  onChange: (v: 'runner' | 'topdown' | 'shooter') => void
 }) {
-  const isTopDown = value === 'topdown'
   return (
     <div className="flex bg-gray-700 rounded-xl p-0.5 gap-0.5">
       <button
         onClick={() => onChange('runner')}
         className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-          !isTopDown ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+          value === 'runner' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
         }`}
       >
         🏃 Runner
@@ -92,12 +91,71 @@ function TemplateToggle({ value, onChange }: {
       <button
         onClick={() => onChange('topdown')}
         className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-          isTopDown ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+          value === 'topdown' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
         }`}
       >
         ⬆️ Top-Down
       </button>
+      <button
+        onClick={() => onChange('shooter')}
+        className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+          value === 'shooter' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+        }`}
+      >
+        🔫 Shooter
+      </button>
     </div>
+  )
+}
+
+// ── Shooter Settings ────────────────────────────────────────────────────────
+
+function ShooterSettingsSection({ shooter, onChange, onTarget }: {
+  shooter?: ShooterConfig
+  onChange: (s: ShooterConfig) => void
+  onTarget: (prefill: string) => void
+}) {
+  const s = shooter || {}
+  const upd = (field: keyof ShooterConfig, value: number) => onChange({ ...s, [field]: value })
+  return (
+    <>
+      <SettingsRow icon="🧱" label={`Wall Count · ${s.wallCount ?? 6}`}
+        onTarget={() => onTarget('add more walls and obstacles')}>
+        <input type="range" min={2} max={12} step={1} value={s.wallCount ?? 6}
+          onChange={e => upd('wallCount', parseInt(e.target.value))}
+          className="w-full accent-red-500 cursor-pointer" />
+      </SettingsRow>
+      <SettingsRow icon="❤️" label="Player HP"
+        onTarget={() => onTarget('change player lives to ')}>
+        <div className="flex gap-1">
+          {[1,2,3,5].map(n => (
+            <button key={n} onClick={() => upd('heroHp', n)}
+              className={`flex-1 py-1 text-xs rounded-lg font-medium transition-all ${
+                (s.heroHp ?? 3) === n ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
+              }`}
+            >{n}</button>
+          ))}
+        </div>
+      </SettingsRow>
+      <SettingsRow icon="💀" label={`Enemy Toughness · ${s.enemyHp ?? 2} hit${(s.enemyHp ?? 2) > 1 ? 's' : ''}`}
+        onTarget={() => onTarget('make enemies tougher ')}>
+        <input type="range" min={1} max={4} step={1} value={s.enemyHp ?? 2}
+          onChange={e => upd('enemyHp', parseInt(e.target.value))}
+          className="w-full accent-red-500 cursor-pointer" />
+      </SettingsRow>
+      <SettingsRow icon="🔫" label="Fire Speed"
+        onTarget={() => onTarget('change fire speed ')}>
+        <div className="flex bg-gray-700 rounded-xl p-0.5 gap-0.5">
+          {([{label:'Slow',v:800},{label:'Normal',v:500},{label:'Fast',v:250}] as const).map(p => (
+            <button key={p.label} onClick={() => upd('fireRate', p.v)}
+              className={`flex-1 py-1 text-xs font-medium rounded-lg transition-all ${
+                (s.fireRate ?? 500) === p.v ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >{p.label}</button>
+          ))}
+        </div>
+      </SettingsRow>
+    </>
   )
 }
 
@@ -283,8 +341,8 @@ function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobile
   codeGameTitle: string
   mobileTarget: boolean
   onMobileToggle: () => void
-  preferredTemplate: 'runner' | 'topdown'
-  onTemplatePreferenceChange: (t: 'runner' | 'topdown') => void
+  preferredTemplate: 'runner' | 'topdown' | 'shooter'
+  onTemplatePreferenceChange: (t: 'runner' | 'topdown' | 'shooter') => void
   onTarget: (prefill: string) => void
 }) {
   // Code game: read-only panel
@@ -316,6 +374,8 @@ function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobile
           <p className="text-xs text-gray-600 mt-2 px-1">
             {preferredTemplate === 'topdown'
               ? '⬆️ Hero moves in 4 directions — enemies swarm from edges'
+              : preferredTemplate === 'shooter'
+              ? '🔫 Top-down battle — WASD to move, click/SPACE to shoot!'
               : '🏃 Hero auto-runs — press SPACE or tap to jump'}
           </p>
         </div>
@@ -344,8 +404,19 @@ function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobile
       {/* Template toggle */}
       <TemplateToggle value={config.template} onChange={v => update('template', v)} />
 
-      {/* Difficulty presets */}
-      <DifficultyPicker value={config.difficulty} onChange={v => update('difficulty', v)} />
+      {/* Shooter-specific settings */}
+      {config.template === 'shooter' && (
+        <ShooterSettingsSection
+          shooter={config.shooter}
+          onChange={s => update('shooter', s)}
+          onTarget={onTarget}
+        />
+      )}
+
+      {/* Difficulty presets (runner + topdown only) */}
+      {config.template !== 'shooter' && (
+        <DifficultyPicker value={config.difficulty} onChange={v => update('difficulty', v)} />
+      )}
 
       <SettingsRow icon="📛" label="Title" onTarget={() => onTarget('Change the game title to ')}>
         <input
@@ -429,7 +500,7 @@ function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobile
         <ColorInput hex={config.backgroundColor} onChange={v => update('backgroundColor', v)} />
       </SettingsRow>
 
-      {!isTopDown && (
+      {config.template === 'runner' && (
         <SettingsRow icon="🌿" label="Ground" onTarget={() => onTarget('Change the ground color to ')}>
           <ColorInput hex={config.groundColor} onChange={v => update('groundColor', v)} />
         </SettingsRow>
@@ -528,7 +599,7 @@ export default function Home() {
 
   // M4: output target settings
   const [mobileTarget, setMobileTarget] = useState(false)
-  const [preferredTemplate, setPreferredTemplate] = useState<'runner' | 'topdown'>('runner')
+  const [preferredTemplate, setPreferredTemplate] = useState<'runner' | 'topdown' | 'shooter'>('runner')
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const recognitionRef = useRef<any>(null)
@@ -664,10 +735,12 @@ export default function Home() {
         const assistantMessage: ChatMessage = {
           role: 'assistant',
           content: isUpdate
-            ? `Updated! ${config.heroEmoji} now dodges ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
-            : isTopDown
-              ? `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji} — use WASD or tap to move! ⬆️`
-              : `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump! 🎮`,
+            ? `Updated! ${config.heroEmoji} vs ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
+            : config.template === 'shooter'
+              ? `I made "${config.title}"! ${config.heroEmoji} vs ${config.enemyEmoji} — WASD to move, click/SPACE to shoot! 🔫`
+              : isTopDown
+                ? `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji} — use WASD or tap to move! ⬆️`
+                : `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump! 🎮`,
         }
         setMessages(prev => [...prev, assistantMessage])
         setCurrentConfig(config)
@@ -750,9 +823,16 @@ export default function Home() {
   // Style chips — shown after game loads; auto-submit to switch style
   const styleChips: { label: string; prompt: string }[] = (() => {
     if (!gameReady || gameMode !== 'config') return []
-    const isTopDown = currentConfig?.template === 'topdown'
+    const template = currentConfig?.template
     const hasDuckObstacles = (currentConfig?.difficulty?.lowObstacleChance ?? 0) > 0
-    if (isTopDown) {
+    if (template === 'shooter') {
+      return [
+        { label: '🧱 More Cover',      prompt: 'add more walls and obstacles' },
+        { label: '🔫 Rapid Fire',      prompt: 'make it rapid fire' },
+        { label: '💀 Tougher Enemies', prompt: 'make enemies tougher and shoot faster' },
+        { label: '🏃 Go Runner',       prompt: 'switch to a runner game' },
+      ]
+    } else if (template === 'topdown') {
       return [
         { label: '🏃 Go Runner',       prompt: 'switch to a side-scrolling runner game' },
         { label: '⭐ Add Collectibles', prompt: 'add collectibles to pick up for bonus points' },
@@ -831,7 +911,7 @@ export default function Home() {
               <h1 className="text-lg font-bold text-white leading-tight">Game Maker</h1>
               <p className="text-xs text-gray-400 truncate">{subtitle}</p>
             </div>
-            <span className="text-[10px] text-gray-600 font-mono shrink-0 select-none">v0.9.1</span>
+            <span className="text-[10px] text-gray-600 font-mono shrink-0 select-none">v1.0.0</span>
           </div>
 
           {/* Tab bar — desktop only; mobile uses bottom nav */}

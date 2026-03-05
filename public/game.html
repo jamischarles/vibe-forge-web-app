@@ -82,10 +82,14 @@
           },
           // Coin-style ding
           score()    { tone(523, 0.05); setTimeout(function(){ tone(784, 0.09); }, 60); },
+          // Shooter: pop + snap
+          shoot()    { tone(900, 0.03, 'square', 0.1); setTimeout(function(){ tone(500, 0.05, 'square', 0.08); }, 25); },
+          // Shooter: low thud on hit
+          hit()      { tone(180, 0.12, 'sawtooth', 0.18); },
         };
       } catch (e) {
         // Web Audio unavailable — return no-op object
-        return { jump: function(){}, land: function(){}, gameOver: function(){}, score: function(){} };
+        return { jump: function(){}, land: function(){}, gameOver: function(){}, score: function(){}, shoot: function(){}, hit: function(){} };
       }
     }
 
@@ -368,6 +372,8 @@
 
       if (config.template === 'topdown') {
         startTopDownGame(config);
+      } else if (config.template === 'shooter') {
+        startShooterGame(config);
       } else {
         startRunnerGame(config);
       }
@@ -850,6 +856,645 @@
       }
 
       game = new Phaser.Game(makePhaserConfig(config.backgroundColor || '#1a1a2e', TopDownScene));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SHOOTER TEMPLATE (top-down paintball — player shoots enemies, AI shoots back)
+    // ══════════════════════════════════════════════════════════════════════════
+    function startShooterGame(config) {
+      var SC             = config.shooter || {};
+      var WALL_COUNT     = Math.max(2,   Math.min(16,   SC.wallCount        || 6));
+      var HERO_HP        = Math.max(1,   Math.min(5,    SC.heroHp           || 3));
+      var ENEMY_HP       = Math.max(1,   Math.min(4,    SC.enemyHp          || 2));
+      var FIRE_RATE      = Math.max(200, Math.min(1200, SC.fireRate         || 500));
+      var ENEMY_FR_BASE  = Math.max(800, Math.min(4000, SC.enemyFireRate    || 2000));
+      var MAX_ENEMIES    = Math.max(2,   Math.min(8,    SC.maxEnemies       || 4));
+      var PROJ_SPEED     = Math.max(200, Math.min(700,  SC.projectileSpeed  || 450));
+      var HERO_RADIUS    = 18;
+      var ENEMY_RADIUS   = 18;
+      var BULLET_RADIUS  = 6;
+      var HERO_SPEED     = Math.max(150, Math.min(400,  config.speed        || 220));
+
+      class ShooterScene extends Phaser.Scene {
+        constructor() { super({ key: 'ShooterScene' }); }
+
+        preload() {
+          if (config.heroSpriteId)  this.load.image('hero-spr',  '/assets/characters/' + config.heroSpriteId  + '.svg');
+          if (config.enemySpriteId) this.load.image('enemy-spr', '/assets/characters/' + config.enemySpriteId + '.svg');
+          if (config.bgId)          this.load.image('bg-tile',   '/assets/backgrounds/' + config.bgId         + '.svg');
+        }
+
+        create() {
+          var W = this.cameras.main.width;
+          var H = this.cameras.main.height;
+          this.W = W; this.H = H;
+
+          this.isGameOver           = false;
+          this.score                = 0;
+          this.heroHp               = HERO_HP;
+          this.isInvincible         = false;
+          this.lastShot             = 0;
+          this.walls                = [];   // { x, y, w, h, obj }
+          this.bullets              = [];   // { x, y, vx, vy, fromEnemy, obj }
+          this.enemies              = [];   // { x, y, hp, maxHp, state, patrolZone, patrolDir, patrolAxis, patrolSpeed, shootTimer, obj }
+          this.rampTimer            = 0;
+          this.currentEnemyFireRate = ENEMY_FR_BASE;
+          this.currentMaxEnemies    = MAX_ENEMIES;
+          this.lastFacingX          = 1;
+          this.lastFacingY          = 0;
+          this.pointerDown          = false;
+          this.tapStartTime         = 0;
+          this.pointerTarget        = null;
+          this.sounds               = createSounds();
+
+          // ── Background ──────────────────────────────────────────────────────
+          if (config.bgId && this.textures.exists('bg-tile')) {
+            this.add.tileSprite(W/2, H/2, W, H, 'bg-tile').setOrigin(0.5).setDepth(-2);
+          } else {
+            this.cameras.main.setBackgroundColor(config.backgroundColor || '#2d4a2d');
+          }
+          // Arena border
+          this.add.rectangle(W/2, H/2, W-8, H-8, 0xffffff, 0).setStrokeStyle(3, 0xffffff, 0.2).setDepth(0);
+
+          // Derive wall color from backgroundColor (darker tint)
+          var bgHex = (config.backgroundColor || '#2d4a2d').replace('#', '');
+          while (bgHex.length < 6) bgHex = '0' + bgHex;
+          var rr = Math.max(0, parseInt(bgHex.slice(0,2), 16) - 60);
+          var gg = Math.max(0, parseInt(bgHex.slice(2,4), 16) - 60);
+          var bb = Math.max(0, parseInt(bgHex.slice(4,6), 16) - 60);
+          this.wallColor = (rr << 16) | (gg << 8) | bb;
+
+          this.generateWalls();
+
+          // ── Hero ────────────────────────────────────────────────────────────
+          this.heroX = W/2; this.heroY = H/2;
+          var useHeroSpr = config.heroSpriteId && this.textures.exists('hero-spr');
+          if (useHeroSpr) {
+            this.heroObj = this.add.image(this.heroX, this.heroY, 'hero-spr').setDisplaySize(44,44).setOrigin(0.5).setDepth(5);
+          } else {
+            this.heroObj = this.add.text(this.heroX, this.heroY, config.heroEmoji || '🧑', {
+              fontSize: '44px', fontFamily: 'Arial'
+            }).setOrigin(0.5).setDepth(5);
+          }
+          this.useHeroSpr  = useHeroSpr;
+          this.useEnemySpr = config.enemySpriteId && this.textures.exists('enemy-spr');
+
+          // ── HP HUD ───────────────────────────────────────────────────────────
+          this.hpObjs = [];
+          this.buildHpHUD();
+
+          // ── Score + Title ────────────────────────────────────────────────────
+          this.scoreTxt = this.add.text(W-20, 20, 'Score: 0', {
+            fontSize: '24px', color: '#fff', stroke: '#000', strokeThickness: 4,
+          }).setOrigin(1,0).setDepth(30);
+          this.add.text(20, 20, config.title || 'Paintball!', {
+            fontSize: '22px', color: '#fff', stroke: '#000', strokeThickness: 4,
+          }).setDepth(30);
+
+          // ── Spawn initial enemies by zone ─────────────────────────────────
+          this.zones = this.buildZones();
+          for (var zi = 0; zi < this.currentMaxEnemies; zi++) {
+            this.spawnEnemy(this.zones[zi % this.zones.length]);
+          }
+
+          // ── Keyboard ─────────────────────────────────────────────────────────
+          this.cursors  = this.input.keyboard.createCursorKeys();
+          this.wasd     = this.input.keyboard.addKeys('W,A,S,D');
+          this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+          // ── Pointer ───────────────────────────────────────────────────────────
+          var self = this;
+          this.input.on('pointerdown', function(ptr) {
+            if (self.isGameOver) { self.scene.restart(); return; }
+            self.pointerDown  = true;
+            self.tapStartTime = self.time.now;
+            self.pointerTarget = { x: ptr.x, y: ptr.y };
+          });
+          this.input.on('pointermove', function(ptr) {
+            if (ptr.isDown) self.pointerTarget = { x: ptr.x, y: ptr.y };
+          });
+          this.input.on('pointerup', function(ptr) {
+            self.pointerDown = false;
+            var dur = self.time.now - self.tapStartTime;
+            if (dur < 180) self.tryHeroShoot(ptr.x, ptr.y); // quick tap = shoot
+            self.pointerTarget = null;
+          });
+
+          // ── Start hint ────────────────────────────────────────────────────────
+          var hint = this.add.text(W/2, H*0.92,
+            'WASD/arrows move · SPACE/click shoot · hold to move on mobile', {
+            fontSize: '15px', color: '#fff', stroke: '#000', strokeThickness: 3,
+            backgroundColor: '#0009', padding: { x:10, y:5 },
+          }).setOrigin(0.5).setDepth(31);
+          this.time.delayedCall(3500, function(){ if (hint && hint.active) hint.setAlpha(0); });
+
+          window.parent.postMessage({ type: 'GAME_READY' }, '*');
+        }
+
+        // ── Wall generation ─────────────────────────────────────────────────
+
+        generateWalls() {
+          var W = this.W, H = this.H;
+          var clearR = 110; // keep center spawn area clear
+          var margin = 50;
+          for (var i = 0; i < WALL_COUNT; i++) {
+            var placed = false;
+            for (var attempt = 0; attempt < 40 && !placed; attempt++) {
+              var wx = Phaser.Math.Between(margin, W - margin);
+              var wy = Phaser.Math.Between(margin, H - margin);
+              if (Math.sqrt((wx-W/2)*(wx-W/2)+(wy-H/2)*(wy-H/2)) < clearR) continue;
+              var type = Phaser.Math.Between(0, 2);
+              if (type === 0) {
+                var ww = Phaser.Math.Between(80, 140), wh = 20;
+                this.addWall(wx - ww/2, wy - wh/2, ww, wh);
+              } else if (type === 1) {
+                var ww2 = 20, wh2 = Phaser.Math.Between(80, 140);
+                this.addWall(wx - ww2/2, wy - wh2/2, ww2, wh2);
+              } else {
+                // L-shape: horizontal arm + vertical arm
+                var aw = Phaser.Math.Between(60, 100), ah = 20;
+                var bw = 20,                           bh = Phaser.Math.Between(60, 100);
+                this.addWall(wx - aw/2, wy - ah/2, aw, ah);
+                this.addWall(wx - bw/2, wy + ah/2, bw, bh);
+              }
+              placed = true;
+            }
+          }
+        }
+
+        addWall(x, y, w, h) {
+          var obj = this.add.rectangle(x + w/2, y + h/2, w, h, this.wallColor).setDepth(3);
+          obj.setStrokeStyle(1, 0xffffff, 0.08);
+          this.walls.push({ x: x, y: y, w: w, h: h, obj: obj });
+        }
+
+        // ── Wall collision resolution ─────────────────────────────────────────
+        // Push circle (cx, cy, r) out of any overlapping wall rectangles.
+
+        resolveWallCollision(cx, cy, r) {
+          for (var i = 0; i < this.walls.length; i++) {
+            var wall = this.walls[i];
+            var nearX  = Math.max(wall.x, Math.min(wall.x + wall.w, cx));
+            var nearY  = Math.max(wall.y, Math.min(wall.y + wall.h, cy));
+            var dx     = cx - nearX;
+            var dy     = cy - nearY;
+            var distSq = dx*dx + dy*dy;
+            if (distSq > 0 && distSq < r*r) {
+              var dist = Math.sqrt(distSq);
+              cx += (dx/dist) * (r - dist);
+              cy += (dy/dist) * (r - dist);
+            } else if (distSq === 0) {
+              cy -= r; // exact center on edge — push up
+            }
+          }
+          cx = Math.max(r, Math.min(this.W - r, cx));
+          cy = Math.max(r, Math.min(this.H - r, cy));
+          return { x: cx, y: cy };
+        }
+
+        // ── Line-of-sight (parametric segment–AABB slab test) ────────────────
+        // Returns TRUE if the segment (x1,y1)→(x2,y2) is unobstructed.
+
+        hasLOS(x1, y1, x2, y2) {
+          var dx = x2 - x1, dy = y2 - y1;
+          for (var i = 0; i < this.walls.length; i++) {
+            var w  = this.walls[i];
+            var wL = w.x, wR = w.x + w.w, wT = w.y, wB = w.y + w.h;
+            var tMin = 0, tMax = 1;
+            // X slab
+            if (Math.abs(dx) < 0.0001) {
+              if (x1 < wL || x1 > wR) continue;
+            } else {
+              var tx1 = (wL - x1) / dx, tx2 = (wR - x1) / dx;
+              if (tx1 > tx2) { var tmp = tx1; tx1 = tx2; tx2 = tmp; }
+              tMin = Math.max(tMin, tx1); tMax = Math.min(tMax, tx2);
+              if (tMin > tMax) continue;
+            }
+            // Y slab
+            if (Math.abs(dy) < 0.0001) {
+              if (y1 < wT || y1 > wB) continue;
+            } else {
+              var ty1 = (wT - y1) / dy, ty2 = (wB - y1) / dy;
+              if (ty1 > ty2) { var tmp2 = ty1; ty1 = ty2; ty2 = tmp2; }
+              tMin = Math.max(tMin, ty1); tMax = Math.min(tMax, ty2);
+              if (tMin > tMax) continue;
+            }
+            return false; // blocked
+          }
+          return true; // clear
+        }
+
+        // ── Projectile system ───────────────────────────────────────────────
+
+        spawnBullet(x, y, vx, vy, fromEnemy) {
+          // Offset spawn forward so bullet starts outside the shooter's body
+          var len = Math.sqrt(vx*vx + vy*vy);
+          if (len > 0) {
+            var offset = (fromEnemy ? ENEMY_RADIUS : HERO_RADIUS) + BULLET_RADIUS + 2;
+            x += (vx/len) * offset;
+            y += (vy/len) * offset;
+          }
+          x = Math.max(BULLET_RADIUS, Math.min(this.W - BULLET_RADIUS, x));
+          y = Math.max(BULLET_RADIUS, Math.min(this.H - BULLET_RADIUS, y));
+          var color = fromEnemy ? 0xff4433 : 0x33aaff;
+          var obj = this.add.circle(x, y, BULLET_RADIUS, color).setDepth(8);
+          this.bullets.push({ x: x, y: y, vx: vx, vy: vy, fromEnemy: fromEnemy, obj: obj });
+        }
+
+        updateBullets(dt) {
+          var W = this.W, H = this.H;
+          for (var i = this.bullets.length - 1; i >= 0; i--) {
+            var b = this.bullets[i];
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            b.obj.setPosition(b.x, b.y);
+
+            // Off-screen
+            if (b.x < -20 || b.x > W+20 || b.y < -20 || b.y > H+20) {
+              b.obj.destroy(); this.bullets.splice(i, 1); continue;
+            }
+
+            // Wall hit
+            var hitWall = false;
+            for (var wi = 0; wi < this.walls.length; wi++) {
+              var w = this.walls[wi];
+              if (b.x > w.x && b.x < w.x+w.w && b.y > w.y && b.y < w.y+w.h) {
+                hitWall = true; break;
+              }
+            }
+            if (hitWall) {
+              this.splatEffect(b.x, b.y, b.fromEnemy ? 0xff4433 : 0x33aaff);
+              b.obj.destroy(); this.bullets.splice(i, 1); continue;
+            }
+
+            // Hero hit (enemy bullets only)
+            if (b.fromEnemy && !this.isInvincible) {
+              var hdx = b.x - this.heroX, hdy = b.y - this.heroY;
+              var hr = HERO_RADIUS + BULLET_RADIUS;
+              if (hdx*hdx + hdy*hdy < hr*hr) {
+                this.splatEffect(b.x, b.y, 0xff4433);
+                b.obj.destroy(); this.bullets.splice(i, 1);
+                this.heroTakeHit();
+                if (this.isGameOver) return;
+                continue;
+              }
+            }
+
+            // Enemy hit (hero bullets only)
+            if (!b.fromEnemy) {
+              var hit = false;
+              for (var ei = this.enemies.length - 1; ei >= 0; ei--) {
+                var e = this.enemies[ei];
+                var edx = b.x - e.x, edy = b.y - e.y;
+                var er = ENEMY_RADIUS + BULLET_RADIUS;
+                if (edx*edx + edy*edy < er*er) {
+                  this.splatEffect(b.x, b.y, 0x44ff88);
+                  b.obj.destroy(); this.bullets.splice(i, 1);
+                  this.enemyTakeHit(e);
+                  hit = true; break;
+                }
+              }
+              if (hit) continue;
+            }
+          }
+        }
+
+        splatEffect(x, y, color) {
+          var dot = this.add.circle(x, y, BULLET_RADIUS * 2.5, color, 0.8).setDepth(9);
+          this.tweens.add({
+            targets: dot, scaleX: 3, scaleY: 3, alpha: 0,
+            duration: 320, ease: 'Power2',
+            onComplete: function() { if (dot.active) dot.destroy(); }
+          });
+        }
+
+        // ── Hero actions ────────────────────────────────────────────────────
+
+        tryHeroShoot(targetX, targetY) {
+          var now = this.time.now;
+          if (now - this.lastShot < FIRE_RATE) return;
+          this.lastShot = now;
+          var dx = targetX - this.heroX, dy = targetY - this.heroY;
+          var len = Math.sqrt(dx*dx + dy*dy);
+          if (len < 1) { dx = this.lastFacingX; dy = this.lastFacingY; len = 1; }
+          this.lastFacingX = dx/len; this.lastFacingY = dy/len;
+          this.spawnBullet(this.heroX, this.heroY, (dx/len)*PROJ_SPEED, (dy/len)*PROJ_SPEED, false);
+          this.sounds.shoot && this.sounds.shoot();
+        }
+
+        heroTakeHit() {
+          this.heroHp = Math.max(0, this.heroHp - 1);
+          this.buildHpHUD();
+          this.sounds.hit && this.sounds.hit();
+          if (this.heroHp <= 0) { this.triggerGameOver(); return; }
+          this.isInvincible = true;
+          var hero = this.heroObj;
+          this.tweens.add({
+            targets: hero, alpha: 0.2, duration: 100, yoyo: true, repeat: 6,
+            onComplete: function() { if (hero.active) hero.setAlpha(1); }
+          });
+          var self = this;
+          this.time.delayedCall(1200, function() { self.isInvincible = false; });
+        }
+
+        buildHpHUD() {
+          if (this.hpObjs) this.hpObjs.forEach(function(h) { if (h.active) h.destroy(); });
+          this.hpObjs = [];
+          for (var i = 0; i < HERO_HP; i++) {
+            var h = this.add.text(16 + i*28, 52, i < this.heroHp ? '❤️' : '🖤', {
+              fontSize: '20px', fontFamily: 'Arial'
+            }).setDepth(30);
+            this.hpObjs.push(h);
+          }
+        }
+
+        // ── Enemy system ────────────────────────────────────────────────────
+
+        buildZones() {
+          var W = this.W, H = this.H;
+          var cx = W/2, cy = H/2;
+          return [
+            { x: 20,    y: 20,    w: cx-40, h: cy-40 }, // top-left
+            { x: cx+20, y: 20,    w: cx-40, h: cy-40 }, // top-right
+            { x: 20,    y: cy+20, w: cx-40, h: cy-40 }, // bottom-left
+            { x: cx+20, y: cy+20, w: cx-40, h: cy-40 }, // bottom-right
+          ];
+        }
+
+        isPositionInWall(cx, cy, r) {
+          for (var i = 0; i < this.walls.length; i++) {
+            var w = this.walls[i];
+            var nx = Math.max(w.x, Math.min(w.x+w.w, cx));
+            var ny = Math.max(w.y, Math.min(w.y+w.h, cy));
+            var dx = cx-nx, dy = cy-ny;
+            if (dx*dx + dy*dy < r*r) return true;
+          }
+          return false;
+        }
+
+        spawnEnemy(zone) {
+          var x, y, attempts = 0;
+          do {
+            x = Phaser.Math.Between(zone.x + 30, Math.max(zone.x + 35, zone.x + zone.w - 30));
+            y = Phaser.Math.Between(zone.y + 30, Math.max(zone.y + 35, zone.y + zone.h - 30));
+            attempts++;
+          } while (attempts < 20 && this.isPositionInWall(x, y, ENEMY_RADIUS));
+
+          var obj;
+          if (this.useEnemySpr) {
+            obj = this.add.image(x, y, 'enemy-spr').setDisplaySize(44,44).setOrigin(0.5).setDepth(4);
+          } else {
+            obj = this.add.text(x, y, config.enemyEmoji || '🎭', {
+              fontSize: '44px', fontFamily: 'Arial'
+            }).setOrigin(0.5).setDepth(4);
+          }
+          var axis = Math.random() < 0.5 ? 'x' : 'y';
+          this.enemies.push({
+            x: x, y: y,
+            hp: ENEMY_HP, maxHp: ENEMY_HP,
+            state: 'patrol',
+            patrolZone: zone,
+            patrolDir: 1,
+            patrolAxis: axis,
+            patrolSpeed: Phaser.Math.Between(55, 90),
+            shootTimer: 0,
+            obj: obj,
+          });
+        }
+
+        enemyTakeHit(e) {
+          e.hp--;
+          if (e.hp <= 0) {
+            var obj = e.obj;
+            this.tweens.add({
+              targets: obj, alpha: 0, scaleX: 1.8, scaleY: 1.8,
+              duration: 250, ease: 'Power2',
+              onComplete: function() { if (obj.active) obj.destroy(); }
+            });
+            this.enemies.splice(this.enemies.indexOf(e), 1);
+            this.score++;
+            this.scoreTxt.setText('Score: ' + this.score);
+            this.sounds.score && this.sounds.score();
+            // Respawn in same zone after 3s
+            var self = this;
+            var zone = e.patrolZone;
+            this.time.delayedCall(3000, function() {
+              if (!self.isGameOver) self.spawnEnemy(zone);
+            });
+          } else {
+            // Flash and seek cover
+            e.state = 'cover';
+            var obj2 = e.obj;
+            this.tweens.add({
+              targets: obj2, alpha: 0.3, duration: 80, yoyo: true, repeat: 2,
+              onComplete: function() { if (obj2.active) obj2.setAlpha(1); }
+            });
+          }
+        }
+
+        // ── Enemy AI state machine ──────────────────────────────────────────
+
+        updateEnemy(e, dt) {
+          var hx = this.heroX, hy = this.heroY;
+          var dx = hx - e.x, dy = hy - e.y;
+          var dist = Math.sqrt(dx*dx + dy*dy);
+          var los  = this.hasLOS(e.x, e.y, hx, hy);
+
+          if (e.state === 'patrol') {
+            var spd = e.patrolSpeed;
+            if (e.patrolAxis === 'x') {
+              e.x += e.patrolDir * spd * dt;
+              if (e.x > e.patrolZone.x + e.patrolZone.w - 20) e.patrolDir = -1;
+              if (e.x < e.patrolZone.x + 20)                  e.patrolDir =  1;
+            } else {
+              e.y += e.patrolDir * spd * dt;
+              if (e.y > e.patrolZone.y + e.patrolZone.h - 20) e.patrolDir = -1;
+              if (e.y < e.patrolZone.y + 20)                  e.patrolDir =  1;
+            }
+            if (los && dist < 280) e.state = 'alert';
+
+          } else if (e.state === 'alert') {
+            if (dist > 0) {
+              var nx = e.x + (dx/dist) * 95 * dt;
+              var ny = e.y + (dy/dist) * 95 * dt;
+              var res = this.resolveWallCollision(nx, ny, ENEMY_RADIUS);
+              e.x = res.x; e.y = res.y;
+            }
+            if (dist < 150 && los) { e.state = 'shoot'; e.shootTimer = 0; }
+            if (dist > 380 || !los) e.state = 'patrol';
+
+          } else if (e.state === 'shoot') {
+            e.shootTimer += dt * 1000;
+            if (e.shootTimer >= this.currentEnemyFireRate) {
+              e.shootTimer = 0;
+              if (dist > 0) {
+                this.spawnBullet(e.x, e.y, (dx/dist)*PROJ_SPEED, (dy/dist)*PROJ_SPEED, true);
+              }
+            }
+            if (!los || dist > 240) e.state = 'alert';
+            // Occasionally seek cover when damaged
+            if (e.hp < e.maxHp && Math.random() < 0.008) e.state = 'cover';
+
+          } else if (e.state === 'cover') {
+            var target = this.findCoverPoint(e);
+            if (target) {
+              var tdx = target.x - e.x, tdy = target.y - e.y;
+              var tdist = Math.sqrt(tdx*tdx + tdy*tdy);
+              if (tdist < 12) {
+                e.state = 'patrol';
+              } else {
+                var nx2 = e.x + (tdx/tdist) * 110 * dt;
+                var ny2 = e.y + (tdy/tdist) * 110 * dt;
+                var res2 = this.resolveWallCollision(nx2, ny2, ENEMY_RADIUS);
+                e.x = res2.x; e.y = res2.y;
+              }
+            } else {
+              e.state = 'patrol';
+            }
+          }
+
+          e.x = Math.max(ENEMY_RADIUS, Math.min(this.W - ENEMY_RADIUS, e.x));
+          e.y = Math.max(ENEMY_RADIUS, Math.min(this.H - ENEMY_RADIUS, e.y));
+          e.obj.setPosition(e.x, e.y);
+        }
+
+        findCoverPoint(e) {
+          var hx = this.heroX, hy = this.heroY;
+          var best = null, bestDist = Infinity;
+          for (var i = 0; i < this.walls.length; i++) {
+            var w = this.walls[i];
+            var pts = [
+              { x: w.x + w.w/2, y: w.y - ENEMY_RADIUS - 5 },
+              { x: w.x + w.w/2, y: w.y + w.h + ENEMY_RADIUS + 5 },
+              { x: w.x - ENEMY_RADIUS - 5, y: w.y + w.h/2 },
+              { x: w.x + w.w + ENEMY_RADIUS + 5, y: w.y + w.h/2 },
+            ];
+            for (var pi = 0; pi < pts.length; pi++) {
+              var pt = pts[pi];
+              // Prefer positions the hero can't see
+              if (!this.hasLOS(hx, hy, pt.x, pt.y)) {
+                var d = (pt.x-e.x)*(pt.x-e.x) + (pt.y-e.y)*(pt.y-e.y);
+                if (d < bestDist) { bestDist = d; best = pt; }
+              }
+            }
+          }
+          // Fallback: nearest wall centroid
+          if (!best && this.walls.length > 0) {
+            for (var j = 0; j < this.walls.length; j++) {
+              var w2 = this.walls[j];
+              var cx = w2.x + w2.w/2, cy = w2.y + w2.h/2;
+              var d2 = (cx-e.x)*(cx-e.x) + (cy-e.y)*(cy-e.y);
+              if (d2 < bestDist) { bestDist = d2; best = { x: cx, y: cy }; }
+            }
+          }
+          return best;
+        }
+
+        // ── Difficulty ramp ─────────────────────────────────────────────────
+
+        updateDifficultyRamp(delta) {
+          this.rampTimer += delta;
+          var ramp30 = Math.floor(this.rampTimer / 30000);
+          this.currentEnemyFireRate = Math.max(800, ENEMY_FR_BASE - ramp30 * 200);
+          var ramp60 = Math.floor(this.rampTimer / 60000);
+          var newMax = Math.min(8, MAX_ENEMIES + ramp60);
+          if (newMax > this.currentMaxEnemies) {
+            this.currentMaxEnemies = newMax;
+            var zone = this.zones[Phaser.Math.Between(0, this.zones.length - 1)];
+            this.spawnEnemy(zone);
+          }
+        }
+
+        // ── Main update ─────────────────────────────────────────────────────
+
+        update(time, delta) {
+          if (this.isGameOver) return;
+          var dt = delta / 1000;
+
+          this.updateDifficultyRamp(delta);
+
+          // Hero movement
+          var vx = 0, vy = 0;
+          if (this.cursors.left.isDown  || this.wasd.A.isDown) vx = -1;
+          if (this.cursors.right.isDown || this.wasd.D.isDown) vx =  1;
+          if (this.cursors.up.isDown    || this.wasd.W.isDown) vy = -1;
+          if (this.cursors.down.isDown  || this.wasd.S.isDown) vy =  1;
+          // Mobile hold-to-move
+          if (vx === 0 && vy === 0 && this.pointerDown && this.pointerTarget) {
+            var pdx = this.pointerTarget.x - this.heroX;
+            var pdy = this.pointerTarget.y - this.heroY;
+            var pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+            if (pdist > 12) { vx = pdx/pdist; vy = pdy/pdist; }
+          }
+          if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
+          if (vx !== 0 || vy !== 0) { this.lastFacingX = vx; this.lastFacingY = vy; }
+
+          var newHX = this.heroX + vx * HERO_SPEED * dt;
+          var newHY = this.heroY + vy * HERO_SPEED * dt;
+          var resolved = this.resolveWallCollision(newHX, newHY, HERO_RADIUS);
+          this.heroX = resolved.x; this.heroY = resolved.y;
+          this.heroObj.setPosition(this.heroX, this.heroY);
+
+          // Keyboard shoot: SPACE fires toward mouse or last facing direction
+          if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+            var ptr = this.input.activePointer;
+            if (ptr && (ptr.x > 0 || ptr.y > 0)) {
+              this.tryHeroShoot(ptr.x, ptr.y);
+            } else {
+              this.tryHeroShoot(
+                this.heroX + this.lastFacingX * 300,
+                this.heroY + this.lastFacingY * 300
+              );
+            }
+          }
+          // Desktop: mouse button held = continuous fire
+          var activePtr = this.input.activePointer;
+          if (activePtr && activePtr.isDown && !this.pointerDown) {
+            this.tryHeroShoot(activePtr.x, activePtr.y);
+          }
+
+          // Update enemies
+          for (var i = this.enemies.length - 1; i >= 0; i--) {
+            this.updateEnemy(this.enemies[i], dt);
+          }
+
+          // Update bullets
+          this.updateBullets(dt);
+        }
+
+        // ── Game Over ───────────────────────────────────────────────────────
+
+        triggerGameOver() {
+          this.isGameOver = true;
+          this.sounds.gameOver && this.sounds.gameOver();
+          if (this.useHeroSpr) {
+            this.heroObj.setTint(0xff4444);
+          } else {
+            this.heroObj.setText('💥');
+          }
+          // Clean up all bullets
+          this.bullets.forEach(function(b) { if (b.obj.active) b.obj.destroy(); });
+          this.bullets = [];
+
+          var cx = this.W/2, cy = this.H/2;
+          this.add.rectangle(cx, cy, 420, 230, 0x000000, 0.82).setDepth(40);
+          this.add.text(cx, cy-68, '💥 Game Over!', {
+            fontSize: '36px', color: '#ff4444', stroke: '#000', strokeThickness: 4,
+          }).setOrigin(0.5).setDepth(41);
+          this.add.text(cx, cy-12, 'Score: ' + this.score + ' enemies eliminated', {
+            fontSize: '24px', color: '#fff',
+          }).setOrigin(0.5).setDepth(41);
+          this.add.text(cx, cy+42, 'Tap or SPACE to play again!', {
+            fontSize: '18px', color: '#aaa',
+          }).setOrigin(0.5).setDepth(41);
+
+          var self = this;
+          this.input.keyboard.once('keydown', function() { self.scene.restart(); });
+          this.input.once('pointerdown', function() { self.scene.restart(); });
+        }
+      }
+
+      game = new Phaser.Game(makePhaserConfig(config.backgroundColor || '#2d4a2d', ShooterScene));
     }
 
     // ── Listen for config or generated code from parent page ─────────────────

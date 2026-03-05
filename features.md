@@ -1,6 +1,6 @@
 # Kids Game Builder — Feature Registry
 
-_Current version: **v0.9.1** | Production: https://kids-game-builder.vercel.app_
+_Current version: **v1.0.0** | Production: https://kids-game-builder.vercel.app_
 
 ## Legend
 ✅ Implemented &nbsp; 🚧 In Progress &nbsp; ⏳ Planned &nbsp; ❌ Dropped
@@ -169,12 +169,40 @@ _Current version: **v0.9.1** | Production: https://kids-game-builder.vercel.app_
 
 ---
 
+## M10 — Shooter Template + scenarios.md (v1.0.0)
+
+| Status | Feature | Key Files |
+|--------|---------|-----------|
+| ✅ | Shooter game template — top-down arena with walls, bidirectional shooting, enemy AI | `public/game.html` (startShooterGame, ShooterScene) |
+| ✅ | Procedural wall generation — WALL_COUNT clusters (horizontal bar / vertical bar / L-shape) | `public/game.html` (generateWalls, addWall) |
+| ✅ | `resolveWallCollision(cx, cy, r)` — nearest-point AABB push-out for hero + enemies | `public/game.html` (ShooterScene) |
+| ✅ | `hasLOS(x1, y1, x2, y2)` — parametric segment–AABB slab test for enemy AI + cover-seeking | `public/game.html` (ShooterScene) |
+| ✅ | Projectile system — `spawnBullet()` / `updateBullets()` / `splatEffect()` tween on wall hits | `public/game.html` (ShooterScene) |
+| ✅ | 4-state enemy AI: patrol → alert → shoot → cover; `findCoverPoint()` samples wall edges | `public/game.html` (updateEnemy, findCoverPoint) |
+| ✅ | Zone system: arena split into 4 quadrants; enemies respawn in same zone after 3 s | `public/game.html` (buildZones, spawnEnemy) |
+| ✅ | Baked-in difficulty ramp: fire rate every 30 s, maxEnemies every 60 s | `public/game.html` (updateDifficultyRamp) |
+| ✅ | Mobile hold-to-move + quick-tap-to-shoot (180 ms threshold); WASD + Space/click on desktop | `public/game.html` (pointer handlers) |
+| ✅ | `ShooterConfig` interface — 7 optional params (wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed) | `lib/types.ts` |
+| ✅ | `createSounds()` extended with `shoot()` + `hit()` Web Audio methods | `public/game.html` (createSounds) |
+| ✅ | 3-way TemplateToggle: 🏃 Runner / ⬆️ Top-Down / 🔫 Shooter | `app/page.tsx` (TemplateToggle) |
+| ✅ | `ShooterSettingsSection` — Wall Count slider, HP pills, Toughness slider, Fire Speed pills | `app/page.tsx` (ShooterSettingsSection) |
+| ✅ | AI CREATE shooter vocabulary: "paintball", "laser tag", "arena shooter", "combat arena", etc. | `lib/ai.ts` (CREATE_SYSTEM_PROMPT) |
+| ✅ | AI UPDATE shooter rules: wallCount ±2, fireRate presets, enemyHp ±1, maxEnemies ±1 | `lib/ai.ts` (UPDATE_SYSTEM_PROMPT) |
+| ✅ | Shooter field clamping + config preservation in `generateGameConfig` | `lib/ai.ts` |
+| ✅ | Shooter style chips: 🧱 More Cover / 🔫 Rapid Fire / 💀 Tougher Enemies / 🏃 Go Runner | `app/page.tsx` (styleChips) |
+| ✅ | `scenarios.md` — "Can We Build It?" tracker for all templates + future roadmap | `scenarios.md` |
+| ✅ | `template` union extended to `'runner' \| 'topdown' \| 'shooter'` everywhere | `lib/types.ts`, `lib/ai.ts`, `app/page.tsx` |
+| ✅ | Difficulty picker hidden for shooter template (ramp is baked in) | `app/page.tsx` |
+| ✅ | Ground color guard narrowed from `!isTopDown` → `config.template === 'runner'` | `app/page.tsx` |
+
+---
+
 ## Planned / Future
 
 | Status | Feature | Notes |
 |--------|---------|-------|
 | ⏳ | Save / share game URL | Serialize GameConfig to URL params or short link |
-| ⏳ | More game templates (platformer, top-down shooter) | M7 candidate |
+| ⏳ | More game templates (platformer, racing, tower defense) | M11+ candidates |
 | ⏳ | More action types (boss wave, time limit, checkpoint) | M7 candidate |
 | ⏳ | User-uploadable sprite images | Needs storage (Vercel Blob or similar) |
 | ⏳ | Game title screen / intro animation | Polish pass |

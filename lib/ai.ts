@@ -61,6 +61,9 @@ Template examples:
 - "mouse avoiding cats" → template: "topdown"
 - "arena dodge game" → template: "topdown"
 - "bird's eye view" → template: "topdown"
+- "paintball battle" → template: "shooter" (top-down combat, walls, shooting)
+- "laser tag arena" → template: "shooter"
+- "arena shooter with obstacles" → template: "shooter"
 - If the prompt includes "[preferred template: topdown]", lean toward "topdown" unless the description clearly implies jumping/running
 - If the prompt includes "[preferred template: runner]", lean toward "runner" unless the description clearly implies overhead/arena movement
 - When in doubt, use "runner"
@@ -74,6 +77,19 @@ Vocabulary: detect these styles from the user's words and apply automatically:
     add collectible action with an emoji matching the theme (stars ⭐, coins 🪙, gems 💎, fish 🐟, etc.)
 - "top-down", "overhead", "arena", "dodge in all directions", "4 directions", "top down", "bird's eye", "maze" →
     template: "topdown"
+- "paintball", "paintball battle", "shooting game", "arena shooter", "laser tag", "combat arena", "battle arena", "tag game", "shoot enemies", "shoot at" →
+    template: "shooter"
+- "shooter" + "lots of cover" or "maze-like" → template: "shooter", shooter: { wallCount: 10 }
+- "shooter" + "tough enemies" or "hard enemies" → template: "shooter", shooter: { enemyHp: 3, enemyFireRate: 1500 }
+- "shooter" + "lots of enemies" → template: "shooter", shooter: { maxEnemies: 6 }
+
+Shooter template rules (only when template === "shooter"):
+- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed }
+- Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450
+- "paintball" theme → heroEmoji: "🧑", enemyEmoji: "🎭", backgroundColor: "#2d4a2d"
+- "laser tag" theme → heroEmoji: "🤖", enemyEmoji: "👾", backgroundColor: "#1a0a2e"
+- "space battle" theme → heroEmoji: "🚀", enemyEmoji: "👽", bgId: "bg-space"
+- "castle/knight" theme → heroSpriteId: "hero-knight", enemySpriteId: "enemy-dragon", bgId: "bg-dungeon"
 
 Sprite selection examples:
 - "a knight fighting dragons" → heroSpriteId: "hero-knight", enemySpriteId: "enemy-dragon", bgId: "bg-dungeon"
@@ -137,6 +153,18 @@ Other rules:
 - "make the background purple" → update backgroundColor only, and clear bgId
 - "switch to top-down" or "make it overhead" → update template to "topdown"
 - "switch to runner" or "make it side-scroll" → update template to "runner"
+- "switch to shooter" or "make it a shooting game" or "add shooting" → update template to "shooter"
+
+Shooter template update rules (only when template === "shooter"):
+- "more walls", "more cover", "more obstacles" → increase shooter.wallCount by 2 (max 16)
+- "fewer walls", "open arena" → decrease shooter.wallCount by 2 (min 2)
+- "faster shooting", "rapid fire" → set shooter.fireRate: 250
+- "slower shooting" → set shooter.fireRate: 800
+- "tougher enemies", "harder enemies" → increase shooter.enemyHp by 1 (max 4)
+- "easier enemies", "easier" → set shooter.enemyFireRate: 3000
+- "more enemies" → increase shooter.maxEnemies by 1 (max 8)
+- "fewer enemies" → decrease shooter.maxEnemies by 1 (min 2)
+- Always preserve shooter fields not mentioned by the kid
 - groundColor: always keep as "#5a8a5a"
 - jumpForce: always keep as 580
 
@@ -199,7 +227,7 @@ export async function generateGameConfig(
         { role: 'user', content: userMessage },
       ],
       temperature: 0.7,
-      max_tokens: 700,
+      max_tokens: 900,
       response_format: { type: 'json_object' },
     })
 
@@ -214,8 +242,20 @@ export async function generateGameConfig(
     config.groundColor = '#5a8a5a' // always fixed
 
     // Validate template — only accept known values
-    if (config.template !== 'runner' && config.template !== 'topdown') {
+    if (config.template !== 'runner' && config.template !== 'topdown' && config.template !== 'shooter') {
       config.template = isUpdate ? (currentConfig.template ?? 'runner') : 'runner'
+    }
+
+    // Validate and clamp shooter sub-config fields
+    if (config.shooter && typeof config.shooter === 'object') {
+      const s = config.shooter
+      if (s.wallCount       != null) s.wallCount       = Math.max(2,   Math.min(16,   s.wallCount))
+      if (s.heroHp          != null) s.heroHp           = Math.max(1,   Math.min(5,    s.heroHp))
+      if (s.enemyHp         != null) s.enemyHp          = Math.max(1,   Math.min(4,    s.enemyHp))
+      if (s.fireRate        != null) s.fireRate         = Math.max(200, Math.min(1200, s.fireRate))
+      if (s.enemyFireRate   != null) s.enemyFireRate    = Math.max(800, Math.min(4000, s.enemyFireRate))
+      if (s.maxEnemies      != null) s.maxEnemies       = Math.max(2,   Math.min(8,    s.maxEnemies))
+      if (s.projectileSpeed != null) s.projectileSpeed  = Math.max(200, Math.min(700,  s.projectileSpeed))
     }
 
     // Validate sprite IDs — strip any hallucinated IDs not in the catalog
@@ -254,6 +294,11 @@ export async function generateGameConfig(
         config.difficulty = currentConfig.difficulty
       }
       if (config.difficulty === null) delete config.difficulty
+      // Preserve shooter config from current config if AI didn't change it
+      if (config.shooter === undefined && currentConfig.shooter) {
+        config.shooter = currentConfig.shooter
+      }
+      if ((config.shooter as unknown) === null) delete config.shooter
     }
 
     return config

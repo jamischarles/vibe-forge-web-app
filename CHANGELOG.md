@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-03-05
+
+### Added — M10: Shooter Template (Paintball Battle) + scenarios.md
+
+**Shooter game template** — third playable template, first where the player fights back:
+- Top-down arena with procedurally placed wall clusters (horizontal bars, vertical bars, L-shapes)
+- Hero moves with WASD/arrow keys; shoots toward mouse cursor or tap point (click/SPACE/tap)
+- Enemy AI — 4-state machine: `patrol` → `alert` → `shoot` → `cover`
+  - Patrol: oscillates within quadrant zone until hero enters line-of-sight at 280px
+  - Alert: chases hero at 95 px/s (wall-resolved) until in range → shoot; loses LOS → back to patrol
+  - Shoot: fires every `enemyFireRate` ms; seeks cover if HP drops
+  - Cover: navigates to nearest wall edge that blocks hero's line-of-sight
+- `hasLOS(x1, y1, x2, y2)` — parametric segment–AABB slab test for all AI decisions
+- `resolveWallCollision(cx, cy, r)` — nearest-point AABB push-out for hero + enemies
+- Blue hero bullets vs red enemy bullets; wall-hit splat tween (scale ×3 + fade)
+- Baked-in difficulty ramp: enemy fire rate tightens every 30 s; max enemies grows every 60 s
+- Mobile UX: hold = move toward tap; quick tap (< 180ms) = shoot toward tap
+- `triggerGameOver()` — "enemies eliminated" score, restart on any input
+- `GAME_READY` / `GAME_ERROR` postMessage signals consistent with other templates
+
+**`ShooterConfig`** (new optional sub-object in `GameConfig`):
+- `wallCount` — obstacle clusters (default 6, range 2–16)
+- `heroHp` — player lives (default 3, range 1–5)
+- `enemyHp` — shots to kill an enemy (default 2, range 1–4)
+- `fireRate` — ms between hero shots (default 500, range 200–1200)
+- `enemyFireRate` — ms between enemy shots (default 2000, range 800–4000)
+- `maxEnemies` — simultaneous enemies (default 4, range 2–8)
+- `projectileSpeed` — px/s (default 450, range 200–700)
+
+**`createSounds()` extended** — new `shoot()` + `hit()` Web Audio methods on both the real and no-op fallback objects.
+
+**3-way TemplateToggle** — 🏃 Runner (gray) / ⬆️ Top-Down (purple) / 🔫 Shooter (red); live-switches without AI call.
+
+**`ShooterSettingsSection`** (new Settings panel section, shown for shooter template only):
+- 🧱 Wall Count slider (2–12)
+- ❤️ Player HP radio pills (1, 2, 3, 5)
+- 💀 Enemy Toughness slider (1–4 hits to eliminate)
+- 🔫 Fire Speed pills: Slow (800ms) / Normal (500ms) / Fast (250ms)
+
+**AI vocabulary (shooter):**
+- CREATE: "paintball", "laser tag", "arena shooter", "combat arena", "battle arena", "tag game", "shoot enemies" → `template: "shooter"`
+- Preset themes: paintball battle, laser tag, space battle, castle siege
+- UPDATE: wallCount ±2, fireRate presets, enemyHp ±1, maxEnemies ±1, switch-to-shooter
+- All 7 ShooterConfig fields clamped post-parse; shooter config preserved across unrelated updates
+
+**Post-game style chips (shooter):** 🧱 More Cover / 🔫 Rapid Fire / 💀 Tougher Enemies / 🏃 Go Runner
+
+**`scenarios.md`** — new file at project root tracking "Can We Build It?" across all templates:
+- Runner (8× ✅ + 1× 🚧 + 1× ❌)
+- Top-Down Avoid (5× ✅ + 1× 🚧 + 1× ❌)
+- Shooter / M10 (5× ✅ + 1× 🚧 + 2× ❌)
+- Clone Mode (5× ✅ + 1× 🚧 + 1× ❌)
+- Future template roadmap table (M11–M14)
+
+### Changed
+- `template` union: `'runner' | 'topdown'` → `'runner' | 'topdown' | 'shooter'` (types.ts + ai.ts + page.tsx)
+- Ground color picker guard: `!isTopDown` → `config.template === 'runner'` (more explicit)
+- Difficulty picker hidden for shooter template (difficulty is baked in to ShooterScene)
+- `max_tokens` in `generateGameConfig`: 700 → 900 (to fit shooter sub-object)
+- Version badge: `v0.9.1` → `v1.0.0`
+
+---
+
 ## [0.9.1] - 2026-03-05
 
 ### Fixed — Overhead duck obstacles + baked-in speed progression

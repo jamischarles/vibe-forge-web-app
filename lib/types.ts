@@ -32,6 +32,16 @@ export interface GameAction {
   }
 }
 
+export interface ShooterConfig {
+  wallCount?:       number   // obstacle clusters, default 6, range 2–16
+  heroHp?:          number   // player lives, default 3, range 1–5
+  enemyHp?:         number   // shots to kill enemy, default 2, range 1–4
+  fireRate?:        number   // ms between hero shots, default 500, range 200–1200
+  enemyFireRate?:   number   // ms between enemy shots, default 2000, range 800–4000
+  maxEnemies?:      number   // simultaneous enemies, default 4, range 2–8
+  projectileSpeed?: number   // px/s, default 450, range 200–700
+}
+
 export interface GameDifficulty {
   spawnDecay?: number         // ms/sec the spawn interval shrinks (runner default: 8, topdown: 12)
   spawnMin?: number           // minimum spawn interval in ms (runner: 900, topdown: 600)
@@ -42,7 +52,7 @@ export interface GameDifficulty {
 }
 
 export interface GameConfig {
-  template: 'runner' | 'topdown'
+  template: 'runner' | 'topdown' | 'shooter'
   heroEmoji: string
   heroSpriteId?: string    // catalog asset ID — overrides emoji rendering when set
   enemyEmoji: string
@@ -55,6 +65,7 @@ export interface GameConfig {
   jumpForce: number
   actions?: GameAction[]       // 0–3 AI-defined game-event behaviors
   difficulty?: GameDifficulty  // progression tuning; omit for engine defaults
+  shooter?: ShooterConfig      // shooter template params; omit for engine defaults
 }
 
 export const SPEED_MIN = 180
