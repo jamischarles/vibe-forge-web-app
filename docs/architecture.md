@@ -71,10 +71,11 @@ interface GameConfig {
 | `enemyFireRate` | 2000ms | 800–4000 | Base enemy fire cooldown (ramps down over time) |
 | `maxEnemies` | 4 | 2–8 | Starting simultaneous enemy count (ramps up) |
 | `projectileSpeed` | 450 | 200–700 | Bullet velocity in px/s |
-| `grenadeType` | — | 'frag'\|'smoke'\|'flash'\|'slow' | ⏳ Planned |
-| `grenadeCount` | — | 0=unlimited | ⏳ Planned |
-| `fogOfWar` | — | boolean | ⏳ Planned |
-| `fogRadius` | — | px (default 180) | ⏳ Planned |
+| `grenadeType` | — | 'frag'\|'smoke'\|'flash'\|'slow' | E key to throw; arcs over walls |
+| `grenadeCount` | 3 | 0=unlimited | Grenade ammo supply |
+| `grenadeCooldown` | 3000ms | ms | Time between throws |
+| `fogOfWar` | — | boolean | Dark map, visibility circle around hero |
+| `fogRadius` | 180 | px | Visibility circle radius |
 
 ### GameDifficulty (`lib/types.ts`) — runner/topdown only
 
@@ -127,12 +128,10 @@ W = 480               H = 640               (canvas dimensions)
 ```javascript
 walls[]     = [{ x, y, w, h, obj }]         // wall rectangles (center x,y)
 bullets[]   = [{ x, y, vx, vy, fromEnemy, obj }]
-enemies[]   = [{ x, y, hp, maxHp, state, patrolZone, zone,
-                 lastFacingX, lastFacingY, lastShot, coverTarget,
-                 blindedUntil }]             // blindedUntil ⏳ planned
-// ⏳ planned:
-grenades[]  = [{ x, y, vx, vy, type, fuse, shadow, obj }]
-smokeZones[]= [{ x, y, r, until, obj }]
+enemies[]   = [{ x, y, hp, maxHp, state, patrolZone,
+                 lastFacingX, lastFacingY, blindedUntil, shootTimer, obj }]
+grenades[]  = [{ x, y, vx, vy, fuse, fuseMax, obj, shadow }]
+smokeZones[]= [{ x, y, r, until, obj }]     // r=80px, 8s duration
 ```
 
 ### Wall Generation (`generateWalls`)
@@ -150,7 +149,7 @@ intersects. Used by:
 - Enemies: `patrol→alert` transition (`dist < 280 && hasLOS`)
 - Enemies: `shoot→alert` fallback (`!hasLOS`)
 - `findCoverPoint()`: prefers positions where `!hasLOS(hero, coverPt)`
-- ⏳ Will be extended: smoke zones also return false when line passes through active cloud
+- Smoke zones: segment-vs-circle test at end of `hasLOS()` — any active smoke zone in path returns false
 
 ### Projectile System
 ```
@@ -183,8 +182,8 @@ entity hit.
 
 `findCoverPoint()` samples wall edges → returns point where `!hasLOS(hero, pt)`.
 
-**Blinded state** ⏳ (planned for flashbang): Check `if (now < e.blindedUntil)` → force
-`patrol`, skip all LOS checks, pick random wander direction.
+**Blinded state** (flashbang): `if (now < e.blindedUntil)` at top of `updateEnemy()` →
+wander randomly at 55px/s, skip all LOS checks, occasionally pick new random direction (2% chance/frame).
 
 ### Difficulty Ramp (`updateDifficultyRamp(delta)`)
 - Every 30s: enemy fire rate -= 200ms (floor 800ms)
@@ -198,9 +197,9 @@ entity hit.
 5. Hero movement → `resolveWallCollision()`
 6. Hero shoot input (SPACE / mouse held)
 7. `updateEnemy(e, dt)` for each enemy (reverse iteration)
-8. `updateBullets(dt)`
-9. ⏳ `updateGrenades(dt)` — planned
-10. ⏳ `updateFog()` — planned (redraws GeometryMask each frame)
+8. `updateBullets(gameDt)` ← enemies + bullets use `gameDt` (0.25× during slow-mo)
+9. `updateGrenades(dt)` — if GRENADE_TYPE (grenades fly at real-time speed; also expires smoke zones)
+10. `updateFog()` — if FOG_OF_WAR (redraws GeometryMask circle at hero position each frame)
 
 ### Background Rendering
 - With `bgUrl` / `bgId`: `add.tileSprite(W/2, H/2, W, H, 'bg-tile')` — scrolls or tiles

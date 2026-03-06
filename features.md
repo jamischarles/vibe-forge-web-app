@@ -231,12 +231,14 @@ _Current version: **v1.0.2** | Production: https://kids-game-builder.vercel.app_
 
 | Status | Feature | Notes |
 |--------|---------|-------|
-| ⏳ | **Grenade system** — `E` key to throw, arcs over walls (skips wall collision), timer-based detonation | Shooter building block; see `docs/architecture.md` |
-| ⏳ | Frag grenade — explosion radius damage (90px), ring flash effect | ShooterConfig `grenadeType: 'frag'` |
-| ⏳ | Smoke grenade — semi-transparent cloud (r=80, 8s), modifies `hasLOS()` return value | ShooterConfig `grenadeType: 'smoke'` |
-| ⏳ | Flashbang — white screen flash, enemy `blindedUntil` timestamp forces patrol state | ShooterConfig `grenadeType: 'flash'` |
-| ⏳ | Slow-motion grenade — multiplies `dt` by 0.25 for 4s, hero speed preserved | ShooterConfig `grenadeType: 'slow'` |
-| ⏳ | Fog of war — dark overlay + `GeometryMask` visibility circle around hero | ShooterConfig `fogOfWar: true`, `fogRadius: number` |
+| ✅ | **Grenade system** — `E` key to throw, arcs over walls (no collision), 1.6s fuse, parabolic arc visual | `public/game.html` (spawnGrenade, updateGrenades, detonateGrenade) |
+| ✅ | Frag grenade — 90px explosion blast + ring flash, damages all enemies in radius | `public/game.html` (detonateFrag) |
+| ✅ | Smoke grenade — gray cloud (r=80, 8s) blocks `hasLOS()` for both hero and enemies | `public/game.html` (detonateSmoke, hasLOS smoke check) |
+| ✅ | Flashbang — white screen flash, enemies within 200px get `blindedUntil` +3s (wander randomly) | `public/game.html` (detonateFlash, updateEnemy blinded branch) |
+| ✅ | Slow-motion grenade — `gameDt * 0.25` for 4s, blue overlay tint, hero moves at full speed | `public/game.html` (detonateSlow, slowUntil state in update loop) |
+| ✅ | Fog of war — dark overlay + `GeometryMask` visibility circle (default r=180) around hero | `public/game.html` (FOG_OF_WAR setup in create, updateFog) |
+| ✅ | Grenade ammo HUD — top-center `💣 ×3` counter; type-specific icon | `public/game.html` (grenadeTxt) |
+| ✅ | Grenade style chips — `💣 Add Grenades`, `💨 Smoke Grenades`, `🌑 Fog of War` shown contextually | `app/page.tsx` (styleChips) |
 | ⏳ | Health pack collectibles | Shooter building block |
 | ⏳ | Ricochet bullets, shotgun spread, homing projectiles | Shooter building blocks |
 | ⏳ | Save / share game URL | Serialize GameConfig to URL params or short link |

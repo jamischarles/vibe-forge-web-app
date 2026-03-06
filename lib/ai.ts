@@ -84,8 +84,24 @@ Vocabulary: detect these styles from the user's words and apply automatically:
 - "shooter" + "lots of enemies" → template: "shooter", shooter: { maxEnemies: 6 }
 
 Shooter template rules (only when template === "shooter"):
-- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed }
+- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed, grenadeType, grenadeCount, grenadeCooldown, fogOfWar, fogRadius }
 - Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450
+- Grenade types (E key to throw, arcs over walls, timer-based detonation):
+  - grenadeType:"frag" → explosion blast radius, damages enemies (default grenadeCount:3)
+  - grenadeType:"smoke" → smoke cloud blocks enemy LOS for 8s (default grenadeCount:3)
+  - grenadeType:"flash" → flashbang blinds nearby enemies 3s, white screen flash (default grenadeCount:3)
+  - grenadeType:"slow" → slow-motion: enemies+bullets at 0.25× speed for 4s (default grenadeCount:3)
+  - grenadeCount:0 → unlimited grenades; grenadeCooldown (ms between throws, default 3000)
+- fogOfWar:true → dark map with visibility circle around hero; fogRadius (px, default 180)
+- Grenade vocabulary:
+  - "grenades" / "throw grenades" / "throwable" → grenadeType:"frag", grenadeCount:3
+  - "smoke" / "smoke grenades" / "smoke bombs" → grenadeType:"smoke"
+  - "flashbang" / "flash grenades" / "blind enemies" → grenadeType:"flash"
+  - "slow motion" / "bullet time" / "time slow" / "time grenade" → grenadeType:"slow"
+  - "unlimited grenades" / "infinite grenades" → grenadeCount:0
+  - "fog of war" / "limited visibility" / "dark map" / "can't see enemies" → fogOfWar:true
+  - "small vision" / "tight visibility" → fogOfWar:true, fogRadius:120
+- Great combos: zombie fog of war → fogOfWar:true + grenadeType:"flash"; stealth → fogOfWar:true + grenadeType:"smoke"
 - ALWAYS assign heroSpriteId and enemySpriteId for shooter games — human/realistic sprites look far better than emoji in top-down combat
 - Default shooter sprite assignment (use when no specific theme is given): heroSpriteId: "hero-soldier", enemySpriteId: "enemy-hitman", bgId: "bg-kenney-dark"
 - "paintball" theme → heroSpriteId: "hero-soldier", enemySpriteId: "enemy-guard", heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-concrete", backgroundColor: "#5a5a5a"
@@ -186,6 +202,16 @@ Shooter template update rules (only when template === "shooter"):
 - "easier enemies", "easier" → set shooter.enemyFireRate: 3000
 - "more enemies" → increase shooter.maxEnemies by 1 (max 8)
 - "fewer enemies" → decrease shooter.maxEnemies by 1 (min 2)
+- "add grenades" / "grenades" → set shooter.grenadeType: "frag", shooter.grenadeCount: 3
+- "add smoke grenades" / "smoke" → set shooter.grenadeType: "smoke"
+- "add flashbangs" / "flashbang" → set shooter.grenadeType: "flash"
+- "add slow motion" / "bullet time" → set shooter.grenadeType: "slow"
+- "unlimited grenades" → set shooter.grenadeCount: 0
+- "remove grenades" → set shooter.grenadeType: null
+- "add fog of war" / "fog of war" / "dark map" → set shooter.fogOfWar: true
+- "remove fog" / "no fog" → set shooter.fogOfWar: false
+- "smaller vision" / "tighter fog" → set shooter.fogRadius: 120
+- "bigger vision" / "wider sight" → set shooter.fogRadius: 240
 - Always preserve shooter fields not mentioned by the kid
 - groundColor: always keep as "#5a8a5a"
 - jumpForce: always keep as 580

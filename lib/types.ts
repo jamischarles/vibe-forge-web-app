@@ -40,6 +40,13 @@ export interface ShooterConfig {
   enemyFireRate?:   number   // ms between enemy shots, default 2000, range 800–4000
   maxEnemies?:      number   // simultaneous enemies, default 4, range 2–8
   projectileSpeed?: number   // px/s, default 450, range 200–700
+  // ── Grenade system ─────────────────────────────────────────────────────────
+  grenadeType?:     'frag' | 'smoke' | 'flash' | 'slow'  // enables E-key grenades
+  grenadeCount?:    number   // ammo supply; 0 = unlimited, default 3
+  grenadeCooldown?: number   // ms between throws, default 3000
+  // ── Fog of war ─────────────────────────────────────────────────────────────
+  fogOfWar?:        boolean  // dark map with visibility circle around hero
+  fogRadius?:       number   // visibility radius in px, default 180
 }
 
 export interface GameDifficulty {

@@ -880,6 +880,12 @@
       var ENEMY_RADIUS   = 18;
       var BULLET_RADIUS  = 6;
       var HERO_SPEED     = Math.max(150, Math.min(400,  config.speed        || 220));
+      // ── Grenade + Fog config ─────────────────────────────────────────────────
+      var GRENADE_TYPE   = SC.grenadeType   || null;
+      var GRENADE_COUNT  = (SC.grenadeCount !== undefined) ? SC.grenadeCount : 3;
+      var GRENADE_CD     = Math.max(500, SC.grenadeCooldown || 3000);
+      var FOG_OF_WAR     = SC.fogOfWar === true;
+      var FOG_RADIUS     = Math.max(60, Math.min(300, SC.fogRadius || 180));
 
       class ShooterScene extends Phaser.Scene {
         constructor() { super({ key: 'ShooterScene' }); }
@@ -905,7 +911,12 @@
           this.lastShot             = 0;
           this.walls                = [];   // { x, y, w, h, obj }
           this.bullets              = [];   // { x, y, vx, vy, fromEnemy, obj }
-          this.enemies              = [];   // { x, y, hp, maxHp, state, patrolZone, patrolDir, patrolAxis, patrolSpeed, shootTimer, obj }
+          this.enemies              = [];   // { x, y, hp, maxHp, state, patrolZone, patrolDir, patrolAxis, patrolSpeed, shootTimer, lastFacingX, lastFacingY, blindedUntil, obj }
+          this.grenades             = [];   // { x, y, vx, vy, fuse, obj, shadow }
+          this.smokeZones           = [];   // { x, y, r, until, obj }
+          this.grenadeAmmo          = (GRENADE_COUNT === 0) ? Infinity : GRENADE_COUNT;
+          this.lastGrenade          = 0;
+          this.slowUntil            = 0;
           this.rampTimer            = 0;
           this.currentEnemyFireRate = ENEMY_FR_BASE;
           this.currentMaxEnemies    = MAX_ENEMIES;
@@ -917,7 +928,7 @@
           this.sounds               = createSounds();
 
           // ── Background ──────────────────────────────────────────────────────
-          if (config.bgId && this.textures.exists('bg-tile')) {
+          if ((config.bgId || config.bgUrl) && this.textures.exists('bg-tile')) {
             this.add.tileSprite(W/2, H/2, W, H, 'bg-tile').setOrigin(0.5).setDepth(-2);
           } else {
             this.cameras.main.setBackgroundColor(config.backgroundColor || '#2d4a2d');
@@ -978,6 +989,14 @@
           this.add.text(20, 20, config.title || 'Paintball!', {
             fontSize: '22px', color: '#fff', stroke: '#000', strokeThickness: 4,
           }).setDepth(30);
+          // ── Grenade ammo HUD ─────────────────────────────────────────────────
+          if (GRENADE_TYPE) {
+            var grenadeIcon = { frag: '💣', smoke: '💨', flash: '🔆', slow: '⏱️' }[GRENADE_TYPE] || '💣';
+            this.grenadeTxt = this.add.text(W/2, 20,
+              grenadeIcon + ' ×' + (this.grenadeAmmo === Infinity ? '∞' : this.grenadeAmmo), {
+              fontSize: '20px', color: '#fff', stroke: '#000', strokeThickness: 3,
+            }).setOrigin(0.5, 0).setDepth(30);
+          }
 
           // ── Spawn initial enemies by zone ─────────────────────────────────
           this.zones = this.buildZones();
@@ -986,9 +1005,10 @@
           }
 
           // ── Keyboard ─────────────────────────────────────────────────────────
-          this.cursors  = this.input.keyboard.createCursorKeys();
-          this.wasd     = this.input.keyboard.addKeys('W,A,S,D');
-          this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+          this.cursors    = this.input.keyboard.createCursorKeys();
+          this.wasd       = this.input.keyboard.addKeys('W,A,S,D');
+          this.spaceKey   = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+          this.grenadeKey = GRENADE_TYPE ? this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E) : null;
 
           // ── Pointer ───────────────────────────────────────────────────────────
           var self = this;
@@ -1008,9 +1028,20 @@
             self.pointerTarget = null;
           });
 
+          // ── Fog of war setup ─────────────────────────────────────────────────
+          if (FOG_OF_WAR) {
+            this.fogGraphics = this.add.graphics().setDepth(52);
+            this.fogGraphics.fillStyle(0x000000, 0.88);
+            this.fogGraphics.fillRect(0, 0, W, H);
+            this.visionShape = this.make.graphics({ add: false });
+            var fogMask = this.visionShape.createGeometryMask();
+            fogMask.invertAlpha = true;
+            this.fogGraphics.setMask(fogMask);
+          }
+
           // ── Start hint ────────────────────────────────────────────────────────
-          var hint = this.add.text(W/2, H*0.92,
-            'WASD/arrows move · SPACE/click shoot · hold to move on mobile', {
+          var hintStr = 'WASD/arrows move · SPACE/click shoot' + (GRENADE_TYPE ? ' · E for grenade' : '') + ' · hold to move on mobile';
+          var hint = this.add.text(W/2, H*0.92, hintStr, {
             fontSize: '15px', color: '#fff', stroke: '#000', strokeThickness: 3,
             backgroundColor: '#0009', padding: { x:10, y:5 },
           }).setOrigin(0.5).setDepth(31);
@@ -1085,6 +1116,7 @@
 
         hasLOS(x1, y1, x2, y2) {
           var dx = x2 - x1, dy = y2 - y1;
+          // Wall slab test
           for (var i = 0; i < this.walls.length; i++) {
             var w  = this.walls[i];
             var wL = w.x, wR = w.x + w.w, wT = w.y, wB = w.y + w.h;
@@ -1107,7 +1139,19 @@
               tMin = Math.max(tMin, ty1); tMax = Math.min(tMax, ty2);
               if (tMin > tMax) continue;
             }
-            return false; // blocked
+            return false; // blocked by wall
+          }
+          // Smoke zones block LOS — segment vs circle (point-to-line distance)
+          var now = this.time.now;
+          var lenSq = dx*dx + dy*dy;
+          for (var si = 0; si < this.smokeZones.length; si++) {
+            var sz = this.smokeZones[si];
+            if (sz.until < now) continue;
+            if (lenSq < 0.001) continue;
+            var t = Math.max(0, Math.min(1, ((sz.x - x1)*dx + (sz.y - y1)*dy) / lenSq));
+            var closestX = x1 + t*dx, closestY = y1 + t*dy;
+            var distSq = (sz.x - closestX)*(sz.x - closestX) + (sz.y - closestY)*(sz.y - closestY);
+            if (distSq < sz.r * sz.r) return false; // blocked by smoke
           }
           return true; // clear
         }
@@ -1196,6 +1240,142 @@
           });
         }
 
+        // ── Grenade system ──────────────────────────────────────────────────
+
+        spawnGrenade(tx, ty) {
+          var now = this.time.now;
+          if (now - this.lastGrenade < GRENADE_CD) return;
+          if (this.grenadeAmmo !== Infinity && this.grenadeAmmo <= 0) return;
+          this.lastGrenade = now;
+          if (this.grenadeAmmo !== Infinity) {
+            this.grenadeAmmo--;
+            if (this.grenadeTxt) {
+              var gi = { frag: '💣', smoke: '💨', flash: '🔆', slow: '⏱️' }[GRENADE_TYPE] || '💣';
+              this.grenadeTxt.setText(gi + ' ×' + this.grenadeAmmo);
+            }
+          }
+          var dx = tx - this.heroX, dy = ty - this.heroY;
+          var len = Math.sqrt(dx*dx + dy*dy);
+          var spd = 200;
+          var vx = len > 1 ? (dx/len)*spd : this.lastFacingX*spd;
+          var vy = len > 1 ? (dy/len)*spd : this.lastFacingY*spd;
+          var obj    = this.add.circle(this.heroX, this.heroY, 7, 0x886600).setDepth(9);
+          var shadow = this.add.circle(this.heroX, this.heroY + 10, 5, 0x000000, 0.35).setDepth(6);
+          this.grenades.push({ x: this.heroX, y: this.heroY, vx: vx, vy: vy,
+            fuse: 1600, fuseMax: 1600, obj: obj, shadow: shadow });
+        }
+
+        updateGrenades(dt) {
+          var now = this.time.now;
+          for (var i = this.grenades.length - 1; i >= 0; i--) {
+            var g = this.grenades[i];
+            g.x += g.vx * dt;
+            g.y += g.vy * dt;
+            // Soft-bounce off canvas edges
+            if (g.x < 12) { g.vx = Math.abs(g.vx)*0.6; g.x = 12; }
+            if (g.x > this.W-12) { g.vx = -Math.abs(g.vx)*0.6; g.x = this.W-12; }
+            if (g.y < 12) { g.vy = Math.abs(g.vy)*0.6; g.y = 12; }
+            if (g.y > this.H-12) { g.vy = -Math.abs(g.vy)*0.6; g.y = this.H-12; }
+            // Parabolic arc visual: bob above real y, grow shadow on "landing"
+            var progress = 1 - (g.fuse / g.fuseMax);
+            var arc = Math.sin(progress * Math.PI) * -18; // negative = up on screen
+            g.obj.setPosition(g.x, g.y + arc);
+            g.shadow.setPosition(g.x, g.y + 8);
+            g.shadow.setScale(0.4 + progress * 1.4);
+            // Count down fuse
+            g.fuse -= dt * 1000;
+            if (g.fuse <= 0) {
+              g.obj.destroy(); g.shadow.destroy();
+              this.grenades.splice(i, 1);
+              this.detonateGrenade(g);
+            }
+          }
+          // Expire smoke zones
+          for (var si = this.smokeZones.length - 1; si >= 0; si--) {
+            var sz = this.smokeZones[si];
+            if (now > sz.until) {
+              var szObj = sz.obj;
+              this.tweens.add({ targets: szObj, alpha: 0, duration: 1200,
+                onComplete: function() { if (szObj.active) szObj.destroy(); } });
+              this.smokeZones.splice(si, 1);
+            }
+          }
+        }
+
+        detonateGrenade(g) {
+          if (GRENADE_TYPE === 'frag')  this.detonateFrag(g.x, g.y);
+          else if (GRENADE_TYPE === 'smoke') this.detonateSmoke(g.x, g.y);
+          else if (GRENADE_TYPE === 'flash') this.detonateFlash(g.x, g.y);
+          else if (GRENADE_TYPE === 'slow')  this.detonateSlow(g.x, g.y);
+        }
+
+        detonateFrag(x, y) {
+          var BLAST = 90;
+          // Expanding ring flash
+          var ring = this.add.circle(x, y, 10, 0xff8800, 0.9).setDepth(20);
+          this.tweens.add({ targets: ring, scaleX: BLAST/5, scaleY: BLAST/5, alpha: 0,
+            duration: 420, ease: 'Power2',
+            onComplete: function() { if (ring.active) ring.destroy(); } });
+          // Damage enemies in blast radius
+          var self = this;
+          for (var i = this.enemies.length - 1; i >= 0; i--) {
+            var e = this.enemies[i];
+            var ex = e.x - x, ey = e.y - y;
+            if (ex*ex + ey*ey < BLAST*BLAST) {
+              e.hp -= 2;
+              this.splatEffect(e.x, e.y, 0xff8800);
+              if (e.hp <= 0) {
+                var zone = e.patrolZone;
+                e.obj.destroy();
+                this.enemies.splice(i, 1);
+                this.score++;
+                this.scoreTxt.setText('Score: ' + this.score);
+                (function(z) { self.time.delayedCall(3000, function() {
+                  if (!self.isGameOver) self.spawnEnemy(z); }); })(zone);
+              }
+            }
+          }
+        }
+
+        detonateSmoke(x, y) {
+          var SR = 80, DUR = 8000;
+          var obj = this.add.circle(x, y, SR, 0x999999, 0.50).setDepth(11);
+          this.smokeZones.push({ x: x, y: y, r: SR, until: this.time.now + DUR, obj: obj });
+        }
+
+        detonateFlash(x, y) {
+          var FR = 200;
+          // White screen flash
+          var flash = this.add.rectangle(this.W/2, this.H/2, this.W, this.H, 0xffffff, 0.95).setDepth(100);
+          this.tweens.add({ targets: flash, alpha: 0, duration: 1500, ease: 'Power2',
+            onComplete: function() { if (flash.active) flash.destroy(); } });
+          // Blind nearby enemies
+          var now = this.time.now;
+          for (var i = 0; i < this.enemies.length; i++) {
+            var e = this.enemies[i];
+            var ex = e.x - x, ey = e.y - y;
+            if (ex*ex + ey*ey < FR*FR) {
+              e.blindedUntil = now + 3000;
+              var ba = Math.random() * Math.PI * 2;
+              e.lastFacingX = Math.cos(ba); e.lastFacingY = Math.sin(ba);
+              e.state = 'patrol';
+            }
+          }
+        }
+
+        detonateSlow(x, y) {
+          this.slowUntil = this.time.now + 4000;
+          var overlay = this.add.rectangle(this.W/2, this.H/2, this.W, this.H, 0x2244ff, 0.18).setDepth(51);
+          this.tweens.add({ targets: overlay, alpha: 0, delay: 3000, duration: 1000,
+            onComplete: function() { if (overlay.active) overlay.destroy(); } });
+        }
+
+        updateFog() {
+          this.visionShape.clear();
+          this.visionShape.fillStyle(0xffffff);
+          this.visionShape.fillCircle(this.heroX, this.heroY, FOG_RADIUS);
+        }
+
         // ── Hero actions ────────────────────────────────────────────────────
 
         tryHeroShoot(targetX, targetY) {
@@ -1277,6 +1457,7 @@
             }).setOrigin(0.5).setDepth(4);
           }
           var axis = Math.random() < 0.5 ? 'x' : 'y';
+          var initAngle = Math.random() * Math.PI * 2;
           this.enemies.push({
             x: x, y: y,
             hp: ENEMY_HP, maxHp: ENEMY_HP,
@@ -1286,6 +1467,9 @@
             patrolAxis: axis,
             patrolSpeed: Phaser.Math.Between(55, 90),
             shootTimer: 0,
+            lastFacingX: Math.cos(initAngle),
+            lastFacingY: Math.sin(initAngle),
+            blindedUntil: 0,
             obj: obj,
           });
         }
@@ -1323,6 +1507,20 @@
         // ── Enemy AI state machine ──────────────────────────────────────────
 
         updateEnemy(e, dt) {
+          // Flashbang: blinded enemies wander randomly, ignore hero
+          if (e.blindedUntil && this.time.now < e.blindedUntil) {
+            e.x += e.lastFacingX * 55 * dt;
+            e.y += e.lastFacingY * 55 * dt;
+            var br = this.resolveWallCollision(e.x, e.y, ENEMY_RADIUS);
+            e.x = br.x; e.y = br.y;
+            e.obj.setPosition(e.x, e.y);
+            if (Math.random() < 0.02) {
+              var ba = Math.random() * Math.PI * 2;
+              e.lastFacingX = Math.cos(ba); e.lastFacingY = Math.sin(ba);
+            }
+            return;
+          }
+
           var hx = this.heroX, hy = this.heroY;
           var dx = hx - e.x, dy = hy - e.y;
           var dist = Math.sqrt(dx*dx + dy*dy);
@@ -1440,6 +1638,8 @@
         update(time, delta) {
           if (this.isGameOver) return;
           var dt = delta / 1000;
+          // Slow-motion grenade: enemies + bullets run at 0.25× speed, hero at full speed
+          var gameDt = (this.slowUntil > 0 && time < this.slowUntil) ? dt * 0.25 : dt;
 
           this.updateDifficultyRamp(delta);
 
@@ -1504,13 +1704,23 @@
             this.tryHeroShoot(activePtr.x, activePtr.y);
           }
 
-          // Update enemies
-          for (var i = this.enemies.length - 1; i >= 0; i--) {
-            this.updateEnemy(this.enemies[i], dt);
+          // Grenade throw — E key
+          if (GRENADE_TYPE && this.grenadeKey && Phaser.Input.Keyboard.JustDown(this.grenadeKey)) {
+            var gPtr = this.input.activePointer;
+            var gTx = (gPtr && (gPtr.x > 0 || gPtr.y > 0)) ? gPtr.x : this.heroX + this.lastFacingX * 200;
+            var gTy = (gPtr && (gPtr.x > 0 || gPtr.y > 0)) ? gPtr.y : this.heroY + this.lastFacingY * 200;
+            this.spawnGrenade(gTx, gTy);
           }
 
-          // Update bullets
-          this.updateBullets(dt);
+          // Update enemies + bullets (slowed during slow-mo)
+          for (var i = this.enemies.length - 1; i >= 0; i--) {
+            this.updateEnemy(this.enemies[i], gameDt);
+          }
+          this.updateBullets(gameDt);
+
+          // Update grenades (always real time) + fog mask
+          if (GRENADE_TYPE) this.updateGrenades(dt);
+          if (FOG_OF_WAR) this.updateFog();
         }
 
         // ── Game Over ───────────────────────────────────────────────────────
@@ -1523,11 +1733,19 @@
           } else {
             this.heroObj.setText('💥');
           }
-          // Clean up gun indicator + all bullets
+          // Clean up gun indicator, bullets, grenades, smoke, fog
           if (this.heroGunIndicator) this.heroGunIndicator.destroy();
           this.heroObj.setRotation(0);
           this.bullets.forEach(function(b) { if (b.obj.active) b.obj.destroy(); });
           this.bullets = [];
+          this.grenades.forEach(function(g) {
+            if (g.obj.active) g.obj.destroy();
+            if (g.shadow.active) g.shadow.destroy();
+          });
+          this.grenades = [];
+          this.smokeZones.forEach(function(sz) { if (sz.obj.active) sz.obj.destroy(); });
+          this.smokeZones = [];
+          if (this.fogGraphics && this.fogGraphics.active) this.fogGraphics.destroy();
 
           var cx = this.W/2, cy = this.H/2;
           this.add.rectangle(cx, cy, 420, 230, 0x000000, 0.82).setDepth(40);
