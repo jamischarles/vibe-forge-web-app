@@ -2,6 +2,10 @@
 
 _Current version: **v1.0.3** | Production: https://kids-game-builder.vercel.app_
 
+> **Note (M11-prereq):** References to `public/game.html` in older milestone rows are historical —
+> all Phaser scene code has been migrated to `src/game/*.ts` (compiled to `public/scenes/`).
+> See `docs/architecture.md` → Build Pipeline for the full source map.
+
 ## Legend
 ✅ Implemented &nbsp; 🚧 In Progress &nbsp; ⏳ Planned &nbsp; ❌ Dropped
 
@@ -251,6 +255,30 @@ _Current version: **v1.0.3** | Production: https://kids-game-builder.vercel.app_
 | ✅ | New style chips — `🔫 Weapon Pickups`, `👥 Mixed Enemies`, `💥 Enemy Grenades` | `app/page.tsx` (styleChips) |
 | ✅ | `ShooterConfig` extended — `healthPickups`, `grenadePickups`, `weaponPickups`, `enemyGrenades`, `enemyTypes` | `lib/types.ts` |
 | ✅ | AI vocabulary — all new features mapped to natural language prompts | `lib/ai.ts` |
+
+---
+
+## M11-prereq — TypeScript Game Source Split (v1.0.3+)
+
+> **Goal:** Extract 2100-line `public/game.html` monolith into typed TypeScript source files
+> so future templates (Platformer, Maze, etc.) can be added without touching the monolith.
+> No gameplay logic changes — type annotations only.
+
+| Status | Feature | Key Files |
+|--------|---------|-----------|
+| ✅ | esbuild build pipeline — TypeScript → `public/scenes/*.js` in 5ms | `package.json` (build:game, dev:game, type-check:game), `tsconfig.game.json` |
+| ✅ | `phaser@3.70.0` as devDep — types only, Phaser loaded via CDN at runtime | `package.json`, `src/game/phaser-global.d.ts` |
+| ✅ | Ambient global declarations — Phaser, game, currentConfig, ActionSystem, startXxxGame | `src/game/phaser-global.d.ts` |
+| ✅ | `src/game/shared.ts` — global state, `createSounds`, `makePhaserConfig`, `startGame` | `src/game/shared.ts` |
+| ✅ | `src/game/action-system.ts` — ActionSystem (script file; `var` is a true global) | `src/game/action-system.ts` |
+| ✅ | `src/game/scenes/runner.ts` — `startRunnerGame` + `RunnerScene` typed | `src/game/scenes/runner.ts` |
+| ✅ | `src/game/scenes/topdown.ts` — `startTopDownGame` + `TopDownScene` typed | `src/game/scenes/topdown.ts` |
+| ✅ | `src/game/scenes/shooter.ts` — `startShooterGame` + `ShooterScene` typed (~500 lines) | `src/game/scenes/shooter.ts` |
+| ✅ | `public/game.html` gutted to ~55-line HTML shell (loads CDN + 5 scene scripts) | `public/game.html` |
+| ✅ | `public/scenes/` gitignored (build artifact); `npm run build` auto-compiles for Vercel | `.gitignore`, `package.json` |
+| ✅ | Zero type errors (`npm run type-check:game`); all 3 templates verified working | — |
+
+---
 
 ## Planned / Future
 

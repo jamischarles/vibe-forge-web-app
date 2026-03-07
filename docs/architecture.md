@@ -1,7 +1,7 @@
 # Kids Game Builder — Architecture Reference
 
 > **Purpose:** Research-first doc. Read this before opening source files.
-> Last updated: v1.0.3
+> Last updated: v1.0.3 (M11-prereq TypeScript split)
 
 ---
 
@@ -9,15 +9,49 @@
 
 ```
 Browser
- ├── app/page.tsx          Next.js 15 client — chat UI, settings, sends config
- │    ├── lib/ai.ts        AI prompt construction + OpenAI API call
- │    ├── lib/types.ts     Shared TypeScript interfaces (GameConfig, ShooterConfig…)
- │    └── lib/assets.ts   Asset catalog (HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS)
- └── public/game.html     Sandboxed iframe — Phaser 3 game engine
-      ├── RunnerScene      Endless side-scrolling runner
-      ├── TopDownScene     4-direction arena avoider
-      └── ShooterScene     Top-down combat arena with walls + shooting
+ ├── app/page.tsx               Next.js 15 client — chat UI, settings, sends config
+ │    ├── lib/ai.ts             AI prompt construction + OpenAI API call
+ │    ├── lib/types.ts          Shared TypeScript interfaces (GameConfig, ShooterConfig…)
+ │    └── lib/assets.ts         Asset catalog (HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS)
+ └── public/game.html           Sandboxed iframe — HTML shell (loads Phaser CDN + scene JS)
+      ├── public/scenes/        esbuild output — gitignored build artifacts
+      │    ├── shared.js        Global state + createSounds + startGame dispatcher
+      │    ├── action-system.js ActionSystem (lives, collectibles, shield, double-pts)
+      │    ├── runner.js        startRunnerGame + RunnerScene
+      │    ├── topdown.js       startTopDownGame + TopDownScene
+      │    └── shooter.js       startShooterGame + ShooterScene
+      └── (source in src/game/ — see Build Pipeline below)
 ```
+
+## Build Pipeline
+
+Game scene TypeScript source lives in `src/game/` and is compiled by esbuild to `public/scenes/`.
+
+```
+src/game/
+ ├── phaser-global.d.ts    Phaser CDN ambient type + all cross-file global declarations
+ ├── shared.ts             → public/scenes/shared.js
+ ├── action-system.ts      → public/scenes/action-system.js  (script — no imports)
+ └── scenes/
+      ├── runner.ts         → public/scenes/runner.js
+      ├── topdown.ts        → public/scenes/topdown.js
+      └── shooter.ts        → public/scenes/shooter.js
+```
+
+**Key rules:**
+- `phaser@3.70.0` is a **devDependency only** — types for TypeScript; Phaser loaded via CDN at runtime
+- esbuild strips `import type` declarations; no Phaser code is bundled into output JS
+- `action-system.ts` has **no imports** → treated as a TypeScript script; `var ActionSystem` is a true global
+- `public/scenes/` is gitignored; regenerated on every build
+
+**npm scripts:**
+
+| Script | What it does |
+|--------|-------------|
+| `npm run build:game` | esbuild compiles `src/game/**/*.ts` → `public/scenes/` |
+| `npm run dev:game` | Same with `--watch` (two parallel esbuild processes) |
+| `npm run type-check:game` | `tsc --noEmit --project tsconfig.game.json` (strict, no emit) |
+| `npm run build` | `build:game` + `next build` (Vercel uses this) |
 
 ---
 
@@ -118,7 +152,7 @@ interface GameConfig {
 
 ---
 
-## ShooterScene Deep Reference (`public/game.html`, lines ~884–1548)
+## ShooterScene Deep Reference (`src/game/scenes/shooter.ts`)
 
 ### Key Constants (set in `create()` from `config.shooter`)
 ```
@@ -259,7 +293,7 @@ wander randomly at 55px/s, skip all LOS checks, occasionally pick new random dir
 
 ---
 
-## RunnerScene Deep Reference (`public/game.html`, lines ~380–650)
+## RunnerScene Deep Reference (`src/game/scenes/runner.ts`)
 
 Key behavior: hero jumps over/ducks under enemies scrolling right→left.
 - Hero: fixed x=120, `GROUND_Y - 10`; jump with SPACE/tap; duck with DOWN/tap-bottom
@@ -270,7 +304,7 @@ Key behavior: hero jumps over/ducks under enemies scrolling right→left.
 
 ---
 
-## TopDownScene Deep Reference (`public/game.html`, lines ~650–870)
+## TopDownScene Deep Reference (`src/game/scenes/topdown.ts`)
 
 Key behavior: hero moves in all 4 directions, enemies swarm from edges.
 - Hero: WASD/arrows; touch = hold pointer and hero moves toward it
@@ -315,7 +349,7 @@ Both prompts include (in order):
 
 ---
 
-## Actions System (`public/game.html` — ActionSystem object)
+## Actions System (`src/game/action-system.ts` — ActionSystem object)
 
 Used in **runner + topdown only** (not shooter). The `ActionSystem` module provides:
 
@@ -339,7 +373,15 @@ Used in **runner + topdown only** (not shooter). The `ActionSystem` module provi
 | `lib/ai.ts` | System prompts, vocab rules, `generateGameConfig()`, `generateGameCode()` |
 | `lib/types.ts` | TypeScript interfaces: GameConfig, ShooterConfig, GameDifficulty, GameAction |
 | `lib/assets.ts` | Asset catalog, `getCatalogSummary()`, `getCharacterById()`, `getBackgroundById()` |
-| `public/game.html` | Phaser 3 game engine — RunnerScene, TopDownScene, ShooterScene, ActionSystem |
+| `public/game.html` | iframe HTML shell — loads Phaser CDN + `public/scenes/*.js` + postMessage handler |
+| `public/scenes/` | **Gitignored build output** — generated by `npm run build:game` |
+| `src/game/phaser-global.d.ts` | Ambient globals: Phaser CDN type + cross-file var declarations |
+| `src/game/shared.ts` | `game`, `currentConfig`, `makePhaserConfig`, `createSounds`, `startGame` dispatcher |
+| `src/game/action-system.ts` | ActionSystem (lives, collectibles, shield, double-pts, speed-ramp) |
+| `src/game/scenes/runner.ts` | `startRunnerGame` + `RunnerScene` |
+| `src/game/scenes/topdown.ts` | `startTopDownGame` + `TopDownScene` |
+| `src/game/scenes/shooter.ts` | `startShooterGame` + `ShooterScene` (walls, AI, grenades, fog, weapons) |
+| `tsconfig.game.json` | TypeScript config for game source (strict, no emit, skipLibCheck) |
 | `public/assets/characters/` | Sprite images (SVG + PNG) |
 | `public/assets/backgrounds/` | Background tiles (SVG + PNG) |
 | `features.md` | Feature registry by milestone — **read this first** |
