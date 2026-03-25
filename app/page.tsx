@@ -5,6 +5,7 @@ import { Mic, MicOff, Gamepad2, Sparkles, RefreshCw, MessageSquare, Settings, Co
 import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED_MAX, VoteRecord, DownvoteCategory, DOWNVOTE_LABELS } from '@/lib/types'
 import type { DesignPlan, DesignBrief } from '@/lib/game-design-engine'
 import { HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS, CharacterAsset, BackgroundAsset } from '@/lib/assets'
+import { summarizeNewConfig, diffConfigs } from '@/lib/config-summary'
 
 type AppState = 'idle' | 'listening' | 'thinking' | 'planning' | 'playing'
 type ActiveTab = 'chat' | 'settings'
@@ -15,6 +16,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   vote?: 'up' | 'down' | null
+  changesSummary?: string[]
 }
 
 // ── Settings sub-components ────────────────────────────────────────────────
@@ -1078,9 +1080,14 @@ export default function Home() {
         baseMsg += '\n\n🧠 Balance adjustments:\n' + plan.rules.map(r => `• ${r.reason}`).join('\n')
       }
 
+      const changesSummary = isUpdate && currentConfig
+        ? diffConfigs(currentConfig, config)
+        : summarizeNewConfig(config)
+
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: baseMsg,
+        changesSummary: changesSummary.length > 0 ? changesSummary : undefined,
       }
       setMessages(prev => [...prev, assistantMessage])
       setCurrentConfig(config)
@@ -1455,6 +1462,18 @@ export default function Home() {
                     : 'bg-gray-700 text-gray-100 rounded-bl-md'
                 }`} style={{ whiteSpace: 'pre-wrap' }}>
                   {msg.content}
+                  {msg.changesSummary && msg.changesSummary.length > 0 && (
+                    <details className="mt-2 text-xs" style={{ whiteSpace: 'normal' }}>
+                      <summary className="cursor-pointer text-gray-400 hover:text-gray-200 select-none">
+                        📋 {msg.changesSummary.some(s => s.includes('\u2192')) ? 'Changes made' : 'Game details'}
+                      </summary>
+                      <ul className="mt-1 ml-4 list-disc space-y-0.5 text-gray-300">
+                        {msg.changesSummary.map((item, j) => (
+                          <li key={j}>{item}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
                 {msg.role === 'assistant' && (
                   <VoteButtons
