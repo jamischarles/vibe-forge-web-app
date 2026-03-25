@@ -28,6 +28,7 @@ function startShooterGame(config: GameConfig) {
   var WEAPON_PICKUPS   = SC.weaponPickups  === true;
   var ENEMY_GRENADES   = !!(GRENADE_TYPE && SC.enemyGrenades  === true);
   var ENEMY_GRENADE_CD = 5000; // ms between enemy grenade throws
+  var GAME_MODE        = SC.gameMode || 'deathmatch';
   var ENEMY_TYPES      = (SC.enemyTypes && SC.enemyTypes.length) ? SC.enemyTypes : ['grunt'];
   var ETYPE_STATS: Record<string, any> = {
     grunt:  { hp: ENEMY_HP,       radius: 16, alertSpd: 95,  patrolMin: 55, patrolMax: 90,  scale: 1.0, tint: -1,       shootsBack: true,  frMult: 1.0 },
@@ -116,10 +117,20 @@ function startShooterGame(config: GameConfig) {
       var bb = Math.max(0, parseInt(bgHex.slice(4,6), 16) - 60);
       this.wallColor = (rr << 16) | (gg << 8) | bb;
 
-      this.generateWalls();
+      // ── Game mode (CTF, etc.) — init before walls so bases are reserved ─
+      this.modeState = initGameMode(this, SC);
+      var modeReserved = this.modeState ? ZoneSystem.getReservedRects() : [];
+      this.generateWalls(modeReserved);
 
       // ── Hero ────────────────────────────────────────────────────────────
-      this.heroX = W/2; this.heroY = H/2;
+      // CTF: start near hero base; default: center
+      if (this.modeState && this.modeState.heroBase) {
+        var hb = this.modeState.heroBase;
+        this.heroX = hb.x + hb.w / 2;
+        this.heroY = hb.y + hb.h / 2;
+      } else {
+        this.heroX = W/2; this.heroY = H/2;
+      }
       var useHeroSpr = config.heroSpriteId && this.textures.exists('hero-spr');
       if (useHeroSpr) {
         this.heroObj = this.add.image(this.heroX, this.heroY, 'hero-spr').setDisplaySize(44,44).setOrigin(0.5).setDepth(5);
@@ -139,8 +150,8 @@ function startShooterGame(config: GameConfig) {
       this.buildHpHUD();
 
       // ── Score + Title ────────────────────────────────────────────────────
-      this.scoreTxt = this.add.text(W-20, 20, 'Score: 0', {
-        fontSize: '24px', color: '#fff', stroke: '#000', strokeThickness: 4,
+      this.scoreTxt = this.add.text(W-20, 20, GAME_MODE === 'ctf' ? 'Kills: 0' : 'Score: 0', {
+        fontSize: GAME_MODE === 'ctf' ? '18px' : '24px', color: '#fff', stroke: '#000', strokeThickness: 4,
       }).setOrigin(1,0).setDepth(56);
       this.add.text(20, 20, config.title || 'Paintball!', {
         fontSize: '22px', color: '#fff', stroke: '#000', strokeThickness: 4,
@@ -148,7 +159,8 @@ function startShooterGame(config: GameConfig) {
       // ── Grenade ammo HUD ─────────────────────────────────────────────────
       if (GRENADE_TYPE) {
         var grenadeIcon = ({ frag: '💣', smoke: '💨', flash: '🔆', slow: '⏱️' } as Record<string,string>)[GRENADE_TYPE] || '💣';
-        this.grenadeTxt = this.add.text(W/2, 20,
+        var grenadeHudY = GAME_MODE === 'ctf' ? 118 : 20;
+        this.grenadeTxt = this.add.text(W/2, grenadeHudY,
           grenadeIcon + ' ×' + (this.grenadeAmmo === Infinity ? '∞' : this.grenadeAmmo), {
           fontSize: '20px', color: '#fff', stroke: '#000', strokeThickness: 3,
         }).setOrigin(0.5, 0).setDepth(56);
@@ -202,7 +214,8 @@ function startShooterGame(config: GameConfig) {
       }
 
       // ── Start hint ────────────────────────────────────────────────────────
-      var hintStr = 'WASD/arrows move · SPACE/click shoot' + (GRENADE_TYPE ? ' · E throw' : '') + (WEAPON_PICKUPS ? ' · walk over weapons' : '') + ' · hold to move on mobile';
+      var hintStr = 'WASD/arrows move · SPACE/click shoot' + (GRENADE_TYPE ? ' · E throw' : '') + (WEAPON_PICKUPS ? ' · walk over weapons' : '') + ' · hold to move on mobile'
+        + (GAME_MODE === 'ctf' ? ' · Grab 🚩 and return to 🔵 base!' : '');
       var hint = this.add.text(W/2, H*0.92, hintStr, {
         fontSize: '15px', color: '#fff', stroke: '#000', strokeThickness: 3,
         backgroundColor: '#0009', padding: { x:10, y:5 },
@@ -214,12 +227,13 @@ function startShooterGame(config: GameConfig) {
 
     // ── Wall generation ─────────────────────────────────────────────────
 
-    generateWalls() {
+    generateWalls(reservedRects?: any[]) {
       var W = this.W, H = this.H;
       var clearR = 110;
       var margin  = 50;
       var placedCount = 0;
       var self = this;
+      var reserved = reservedRects || [];
 
       // Helper: place a random wall cluster at (wx, wy) using one of 3 types
       function placeCluster(wx: number, wy: number) {
@@ -272,6 +286,13 @@ function startShooterGame(config: GameConfig) {
           var wx = Phaser.Math.Between(margin, W - margin);
           var wy = Phaser.Math.Between(margin, H - margin);
           if (Math.sqrt((wx-W/2)*(wx-W/2)+(wy-H/2)*(wy-H/2)) < clearR) continue;
+          // Avoid reserved rects (CTF bases, etc.)
+          var inReserved = false;
+          for (var ri = 0; ri < reserved.length; ri++) {
+            var rr = reserved[ri];
+            if (wx > rr.x && wx < rr.x + rr.w && wy > rr.y && wy < rr.y + rr.h) { inReserved = true; break; }
+          }
+          if (inReserved) continue;
           placeCluster(wx, wy);
           found = true;
         }
@@ -527,10 +548,11 @@ function startShooterGame(config: GameConfig) {
             if (e.hp <= 0) {
               var zone = e.patrolZone;
               if (e.hpBar) e.hpBar.destroy();
+              if (self.modeState) self.modeState.onEnemyDeath(self, e);
               e.obj.destroy();
               this.enemies.splice(i, 1);
               this.score++;
-              this.scoreTxt.setText('Score: ' + this.score);
+              this.scoreTxt.setText((GAME_MODE === 'ctf' ? 'Kills: ' : 'Score: ') + this.score);
               (function(z: any) { self.time.delayedCall(3000, function() {
                 if (!self.isGameOver) self.spawnEnemy(z); }); })(zone);
             }
@@ -626,6 +648,8 @@ function startShooterGame(config: GameConfig) {
       this.heroHp = Math.max(0, this.heroHp - 1);
       this.buildHpHUD();
       this.sounds.hit && this.sounds.hit();
+      // Drop flag if carrying in CTF
+      if (this.modeState) this.modeState.onHeroDeath(this, this.heroX, this.heroY);
       if (this.heroHp <= 0) { this.triggerGameOver(); return; }
       this.isInvincible = true;
       var hero = this.heroObj;
@@ -696,7 +720,7 @@ function startShooterGame(config: GameConfig) {
       var axis = Math.random() < 0.5 ? 'x' : 'y';
       var initAngle = Math.random() * Math.PI * 2;
       var hpBar = this.add.graphics().setDepth(12);
-      this.enemies.push({
+      var enemyObj: any = {
         x: x, y: y,
         hp: stats.hp, maxHp: stats.hp,
         eType: eType,
@@ -716,7 +740,12 @@ function startShooterGame(config: GameConfig) {
         blindedUntil: 0,
         hpBar: hpBar,
         obj: obj,
-      });
+        aiRole: null,
+        carrying: null,
+      };
+      // Assign AI role for objective modes
+      if (this.modeState) AIRoles.assignRole(enemyObj, this.modeState);
+      this.enemies.push(enemyObj);
     }
 
     enemyTakeHit(e: any, dmg: number) {
@@ -729,9 +758,11 @@ function startShooterGame(config: GameConfig) {
           duration: 250, ease: 'Power2',
           onComplete: function() { if (obj.active) obj.destroy(); }
         });
+        // Notify mode system (drop flag if carrying)
+        if (this.modeState) this.modeState.onEnemyDeath(this, e);
         this.enemies.splice(this.enemies.indexOf(e), 1);
         this.score++;
-        this.scoreTxt.setText('Score: ' + this.score);
+        this.scoreTxt.setText((GAME_MODE === 'ctf' ? 'Kills: ' : 'Score: ') + this.score);
         this.sounds.score && this.sounds.score();
         // Respawn in same zone after 3s
         var self = this;
@@ -768,26 +799,71 @@ function startShooterGame(config: GameConfig) {
       }
 
       var hx = this.heroX, hy = this.heroY;
-      var dx = hx - e.x, dy = hy - e.y;
+
+      // ── AI role override: redirect target for objective modes ──────
+      var roleTarget = (this.modeState && e.aiRole) ? AIRoles.getTarget(e, this.modeState, hx, hy) : null;
+      var targetX = roleTarget ? roleTarget.x : hx;
+      var targetY = roleTarget ? roleTarget.y : hy;
+      var alertRange = roleTarget ? (roleTarget.alertRange || 280) : 280;
+
+      var dx = targetX - e.x, dy = targetY - e.y;
       var dist = Math.sqrt(dx*dx + dy*dy);
-      var los  = this.hasLOS(e.x, e.y, hx, hy);
+      // LOS always checked against hero (for shooting) and target (for movement)
+      var losHero   = this.hasLOS(e.x, e.y, hx, hy);
+      var losTarget = roleTarget ? this.hasLOS(e.x, e.y, targetX, targetY) : losHero;
+      var los = losHero;
 
       var er = e.radius || ENEMY_RADIUS;
 
+      // Carriers in CTF: move toward target (base) at boosted speed
+      if (e.carrying && roleTarget && roleTarget.fleeing) {
+        var nx3 = e.x + (dx/Math.max(1,dist)) * (e.alertSpeed || 95) * 1.2 * dt;
+        var ny3 = e.y + (dy/Math.max(1,dist)) * (e.alertSpeed || 95) * 1.2 * dt;
+        var res3 = this.resolveWallCollision(nx3, ny3, er);
+        e.x = res3.x; e.y = res3.y;
+        // Only shoot hero if very close
+        var heroDx = hx - e.x, heroDy = hy - e.y;
+        var heroDist = Math.sqrt(heroDx*heroDx + heroDy*heroDy);
+        if (heroDist < 100 && losHero && e.shootsBack !== false) {
+          e.shootTimer += dt * 1000;
+          var eFireRate2 = this.currentEnemyFireRate * (e.frMult || 1.0);
+          if (e.shootTimer >= eFireRate2) {
+            e.shootTimer = 0;
+            this.spawnBullet(e.x, e.y, (heroDx/heroDist)*PROJ_SPEED, (heroDy/heroDist)*PROJ_SPEED, true);
+          }
+        }
+        e.x = Math.max(er, Math.min(this.W - er, e.x));
+        e.y = Math.max(er, Math.min(this.H - er, e.y));
+        e.obj.setPosition(e.x, e.y);
+        if (e.hpBar) { e.hpBar.clear(); }
+        return;
+      }
+
       if (e.state === 'patrol') {
-        var spd = e.patrolSpeed;
-        if (e.patrolAxis === 'x') {
-          e.x += e.patrolDir * spd * dt;
-          if (e.x > e.patrolZone.x + e.patrolZone.w - 20) e.patrolDir = -1;
-          if (e.x < e.patrolZone.x + 20)                  e.patrolDir =  1;
+        // Role-aware patrol: defenders/captures move toward target instead of pacing
+        if (roleTarget && !roleTarget.urgent && dist > 30) {
+          var pnx = e.x + (dx/dist) * e.patrolSpeed * dt;
+          var pny = e.y + (dy/dist) * e.patrolSpeed * dt;
+          var pRes = this.resolveWallCollision(pnx, pny, er);
+          e.x = pRes.x; e.y = pRes.y;
         } else {
-          e.y += e.patrolDir * spd * dt;
-          if (e.y > e.patrolZone.y + e.patrolZone.h - 20) e.patrolDir = -1;
-          if (e.y < e.patrolZone.y + 20)                  e.patrolDir =  1;
+          var spd = e.patrolSpeed;
+          if (e.patrolAxis === 'x') {
+            e.x += e.patrolDir * spd * dt;
+            if (e.x > e.patrolZone.x + e.patrolZone.w - 20) e.patrolDir = -1;
+            if (e.x < e.patrolZone.x + 20)                  e.patrolDir =  1;
+          } else {
+            e.y += e.patrolDir * spd * dt;
+            if (e.y > e.patrolZone.y + e.patrolZone.h - 20) e.patrolDir = -1;
+            if (e.y < e.patrolZone.y + 20)                  e.patrolDir =  1;
+          }
         }
         var patRes = this.resolveWallCollision(e.x, e.y, er);
         e.x = patRes.x; e.y = patRes.y;
-        if (los && dist < 280) e.state = 'alert';
+        // Alert when hero is visible and in range
+        var heroAlertDx = hx - e.x, heroAlertDy = hy - e.y;
+        var heroAlertDist = Math.sqrt(heroAlertDx*heroAlertDx + heroAlertDy*heroAlertDy);
+        if (losHero && heroAlertDist < alertRange) e.state = 'alert';
 
       } else if (e.state === 'alert') {
         if (dist > 0) {
@@ -1155,6 +1231,13 @@ function startShooterGame(config: GameConfig) {
       // Update pickups + weapon pickups
       this.updatePickups();
       if (WEAPON_PICKUPS) this.updateWeaponPickups();
+
+      // Update game mode (CTF objectives, scoring, timer)
+      if (this.modeState) {
+        var modeResult = this.modeState.update(this, dt, gameDt, this.heroX, this.heroY, HERO_RADIUS, this.enemies);
+        if (modeResult === 'victory')  { this.triggerVictory(); return; }
+        if (modeResult === 'defeat')   { this.triggerGameOver(); return; }
+      }
     }
 
     // ── Game Over ───────────────────────────────────────────────────────
@@ -1193,16 +1276,74 @@ function startShooterGame(config: GameConfig) {
         if (wp.labelObj && wp.labelObj.active) wp.labelObj.destroy();
       });
       this.weaponPickupObjs = [];
+      // Clean up mode system
+      if (this.modeState) this.modeState.destroy();
 
       var cx = this.W/2, cy = this.H/2;
       this.add.rectangle(cx, cy, 420, 230, 0x000000, 0.82).setDepth(40);
       this.add.text(cx, cy-68, '💥 Game Over!', {
         fontSize: '36px', color: '#ff4444', stroke: '#000', strokeThickness: 4,
       }).setOrigin(0.5).setDepth(41);
-      this.add.text(cx, cy-12, 'Score: ' + this.score + ' enemies eliminated', {
+      var overMsg = GAME_MODE === 'ctf'
+        ? 'Captures: 🔵 ' + MatchScoring.heroScore + ' – ' + MatchScoring.enemyScore + ' 🔴'
+        : 'Score: ' + this.score + ' enemies eliminated';
+      this.add.text(cx, cy-12, overMsg, {
         fontSize: '24px', color: '#fff',
       }).setOrigin(0.5).setDepth(41);
       this.add.text(cx, cy+42, 'Tap or SPACE to play again!', {
+        fontSize: '18px', color: '#aaa',
+      }).setOrigin(0.5).setDepth(41);
+
+      var self = this;
+      this.input.keyboard!.once('keydown', function() { self.scene.restart(); });
+      this.input.once('pointerdown', function() { self.scene.restart(); });
+    }
+
+    // ── Victory (objective modes) ──────────────────────────────────────
+
+    triggerVictory() {
+      this.isGameOver = true;
+      this.sounds.score && this.sounds.score();
+      // Clean up game elements
+      if (this.heroGunIndicator) this.heroGunIndicator.destroy();
+      this.heroObj.setRotation(0);
+      this.bullets.forEach(function(b: any) { if (b.obj.active) b.obj.destroy(); });
+      this.bullets = [];
+      this.grenades.forEach(function(g: any) {
+        if (g.obj.active) g.obj.destroy();
+        if (g.shadow.active) g.shadow.destroy();
+      });
+      this.grenades = [];
+      this.smokeZones.forEach(function(sz: any) { if (sz.obj.active) sz.obj.destroy(); });
+      this.smokeZones = [];
+      if (this.fogGraphics && this.fogGraphics.active) this.fogGraphics.destroy();
+      this.enemies.forEach(function(e: any) {
+        if (e.hpBar && e.hpBar.active) e.hpBar.destroy();
+      });
+      this.pickups.forEach(function(p: any) {
+        if (p.obj && p.obj.active) p.obj.destroy();
+        if (p.labelObj && p.labelObj.active) p.labelObj.destroy();
+      });
+      this.pickups = [];
+      this.weaponPickupObjs.forEach(function(wp: any) {
+        if (wp.obj && wp.obj.active) wp.obj.destroy();
+        if (wp.labelObj && wp.labelObj.active) wp.labelObj.destroy();
+      });
+      this.weaponPickupObjs = [];
+      if (this.modeState) this.modeState.destroy();
+
+      var cx = this.W/2, cy = this.H/2;
+      this.add.rectangle(cx, cy, 420, 260, 0x000000, 0.82).setDepth(40);
+      this.add.text(cx, cy-78, '🏆 VICTORY! 🏆', {
+        fontSize: '36px', color: '#44ff44', stroke: '#000', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(41);
+      this.add.text(cx, cy-22, 'Captures: 🔵 ' + MatchScoring.heroScore + ' – ' + MatchScoring.enemyScore + ' 🔴', {
+        fontSize: '24px', color: '#fff',
+      }).setOrigin(0.5).setDepth(41);
+      this.add.text(cx, cy+18, 'Kills: ' + this.score, {
+        fontSize: '20px', color: '#ccc',
+      }).setOrigin(0.5).setDepth(41);
+      this.add.text(cx, cy+56, 'Tap or SPACE to play again!', {
         fontSize: '18px', color: '#aaa',
       }).setOrigin(0.5).setDepth(41);
 

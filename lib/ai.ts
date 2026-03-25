@@ -103,7 +103,7 @@ Vocabulary: detect these styles from the user's words and apply automatically:
 - "shooter" + "lots of enemies" → template: "shooter", shooter: { maxEnemies: 6 }
 
 Shooter template rules (only when template === "shooter"):
-- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed, grenadeType, grenadeCount, grenadeCooldown, fogOfWar, fogRadius, healthPickups, grenadePickups, weaponPickups, enemyGrenades, enemyTypes }
+- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed, grenadeType, grenadeCount, grenadeCooldown, fogOfWar, fogRadius, healthPickups, grenadePickups, weaponPickups, enemyGrenades, enemyTypes, gameMode, modeConfig }
 - Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450
 - Grenade types (E key to throw, arcs over walls, timer-based detonation):
   - grenadeType:"frag" → explosion blast radius, damages enemies (default grenadeCount:3)
@@ -134,6 +134,15 @@ Shooter template rules (only when template === "shooter"):
   - "fast enemies" / "scouts" / "quick enemies" / "speedy enemies" → enemyTypes:["grunt","scout"]
   - "sniper enemies" / "long range enemies" / "enemies that hang back" → enemyTypes:["grunt","sniper"]
   - "all enemy types" / "full variety" / "every enemy type" → enemyTypes:["grunt","heavy","scout","sniper"]
+- Game mode vocabulary (objective-based mini-games within shooter):
+  - "capture the flag" / "CTF" / "flag game" / "steal the flag" → gameMode:"ctf"
+  - "capture the flag" defaults: gameMode:"ctf", modeConfig: { captureLimit: 3, timeLimit: 180 }
+  - "quick CTF" / "fast CTF" → gameMode:"ctf", modeConfig: { captureLimit: 1, timeLimit: 60 }
+  - "long CTF" / "epic CTF" → gameMode:"ctf", modeConfig: { captureLimit: 5, timeLimit: 300 }
+  - "no time limit CTF" → gameMode:"ctf", modeConfig: { captureLimit: 3, timeLimit: 0 }
+  - When gameMode is "ctf", ALWAYS set wallCount to at least 6 for good cover, and maxEnemies to at least 4
+  - CTF combos: "CTF with grenades" → gameMode:"ctf" + grenadeType:"frag"; "CTF with fog" → gameMode:"ctf" + fogOfWar:true
+  - Omit gameMode entirely for normal deathmatch shooter games (default behavior)
 - ALWAYS assign heroSpriteId and enemySpriteId for shooter games — human/realistic sprites look far better than emoji in top-down combat
 - Default shooter sprite assignment (use when no specific theme is given): heroSpriteId: "hero-soldier", enemySpriteId: "enemy-hitman", bgId: "bg-kenney-dark"
 - "paintball" theme → heroSpriteId: "hero-soldier", enemySpriteId: "enemy-guard", heroEmoji: "🧑", enemyEmoji: "🎭", bgId: "bg-concrete", backgroundColor: "#5a5a5a"
@@ -258,6 +267,14 @@ Shooter template update rules (only when template === "shooter"):
 - "add snipers" / "sniper enemies" / "long range enemies" → set shooter.enemyTypes: ["grunt","sniper"]
 - "all enemy types" / "mixed enemies" / "full enemy variety" → set shooter.enemyTypes: ["grunt","heavy","scout","sniper"]
 - "reset enemy types" / "normal enemies" / "only grunts" → set shooter.enemyTypes: ["grunt"]
+- "capture the flag" / "CTF" / "add CTF" / "flag game" → set shooter.gameMode: "ctf", shooter.modeConfig: { captureLimit: 3, timeLimit: 180 }
+- "quick CTF" → set shooter.gameMode: "ctf", shooter.modeConfig: { captureLimit: 1, timeLimit: 60 }
+- "remove CTF" / "normal mode" / "deathmatch" / "remove game mode" → set shooter.gameMode: "deathmatch", remove shooter.modeConfig
+- "more captures" / "more flags needed" → increase shooter.modeConfig.captureLimit by 1
+- "fewer captures" → decrease shooter.modeConfig.captureLimit by 1 (min 1)
+- "more time" / "longer match" → increase shooter.modeConfig.timeLimit by 60
+- "less time" / "shorter match" → decrease shooter.modeConfig.timeLimit by 60 (min 30)
+- "no time limit" → set shooter.modeConfig.timeLimit: 0
 - Always preserve shooter fields not mentioned by the kid
 - groundColor: always keep as "#5a8a5a"
 - jumpForce: always keep as 580
@@ -352,6 +369,14 @@ export async function generateGameConfig(
       if (s.enemyFireRate   != null) s.enemyFireRate    = Math.max(800, Math.min(4000, s.enemyFireRate))
       if (s.maxEnemies      != null) s.maxEnemies       = Math.max(2,   Math.min(8,    s.maxEnemies))
       if (s.projectileSpeed != null) s.projectileSpeed  = Math.max(200, Math.min(700,  s.projectileSpeed))
+      // Validate gameMode
+      if (s.gameMode && s.gameMode !== 'deathmatch' && s.gameMode !== 'ctf') s.gameMode = 'deathmatch'
+      // Validate modeConfig
+      if (s.modeConfig && typeof s.modeConfig === 'object') {
+        if (s.modeConfig.captureLimit != null) s.modeConfig.captureLimit = Math.max(1, Math.min(10, s.modeConfig.captureLimit))
+        if (s.modeConfig.timeLimit != null)    s.modeConfig.timeLimit    = Math.max(0, Math.min(600, s.modeConfig.timeLimit))
+        if (s.modeConfig.defenderRatio != null) s.modeConfig.defenderRatio = Math.max(0, Math.min(1, s.modeConfig.defenderRatio))
+      }
     }
 
     // Validate sprite IDs — strip any hallucinated IDs not in the catalog
