@@ -17,6 +17,7 @@ interface ChatMessage {
   content: string
   vote?: 'up' | 'down' | null
   changesSummary?: string[]
+  summaryLabel?: string
 }
 
 // ── Settings sub-components ────────────────────────────────────────────────
@@ -1066,16 +1067,13 @@ export default function Home() {
     if (!response.ok) throw new Error(data.error || 'Something went wrong')
 
     if (data.type === 'code') {
-      const codeSummary: string[] = [`Game: ${data.title}`]
-      if (gameMode === 'code') {
-        codeSummary.push(`Change requested: ${promptText}`)
-      }
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: gameMode === 'code'
           ? `Rebuilt "${data.title}" with your changes! 🕹️ SPACE or tap to play.`
           : `I coded "${data.title}" for you! 🕹️ Press SPACE or tap to play. Tell me what to change!`,
-        changesSummary: codeSummary,
+        changesSummary: data.changesSummary,
+        summaryLabel: gameMode === 'code' ? 'Changes made' : 'What was built',
       }
       setMessages(prev => [...prev, assistantMessage])
       setGameMode('code')
@@ -1121,6 +1119,7 @@ export default function Home() {
         role: 'assistant',
         content: baseMsg,
         changesSummary: changesSummary.length > 0 ? changesSummary : undefined,
+        summaryLabel: isUpdate ? 'Changes made' : 'What was built',
       }
       setMessages(prev => [...prev, assistantMessage])
       setCurrentConfig(config)
@@ -1498,7 +1497,7 @@ export default function Home() {
                   {msg.changesSummary && msg.changesSummary.length > 0 && (
                     <details className="mt-2 text-xs" style={{ whiteSpace: 'normal' }}>
                       <summary className="cursor-pointer text-gray-400 hover:text-gray-200 select-none">
-                        📋 {msg.changesSummary.some(s => s.includes('\u2192')) ? 'Changes made' : 'Game details'}
+                        📋 {msg.summaryLabel || 'Game details'}
                       </summary>
                       <ul className="mt-1 ml-4 list-disc space-y-0.5 text-gray-300">
                         {msg.changesSummary.map((item, j) => (

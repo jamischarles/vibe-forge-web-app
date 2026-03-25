@@ -574,6 +574,11 @@ STRICT RULES:
 10. Physics: use update(time, delta) with const dt = delta/1000 — manual integration
 11. Target ~200 lines — clean readable code with brief comments
 12. audio: { disableWebAudio: true } in Phaser config (iframe sandbox restriction)
+13. IMPORTANT: Start your code with a SUMMARY comment block listing what you built/changed. Format:
+// SUMMARY: Built a Pac-Man clone with maze, dots, and ghost AI
+// SUMMARY: Added power pellets that let the player eat ghosts
+// SUMMARY: 4-directional movement with arrow keys and tap controls
+Each SUMMARY line should describe one gameplay feature or change you implemented. Keep them short and user-friendly (what it does, not how). 3-6 lines max.
 
 EMOJI RENDERING PATTERN (use this exactly):
   this.hero = this.add.text(x, y, '🚀', { fontSize: '48px', fontFamily: 'Arial' }).setOrigin(0.5)
@@ -629,11 +634,23 @@ export async function generateGameCode(userPrompt: string, mobile = false): Prom
       .replace(/\n?```$/i, '')
       .trim()
 
+    // Extract SUMMARY comment lines and strip them from the code
+    const summaryLines: string[] = []
+    const codeWithoutSummary = cleaned.replace(/^\/\/ SUMMARY: (.+)$/gm, (_, line) => {
+      summaryLines.push(line.trim())
+      return ''
+    }).replace(/^\n+/, '').trim()
+
     // Extract title from the code (look for a text object with the game title)
-    const titleMatch = cleaned.match(/this\.add\.text\([^,]+,\s*[^,]+,\s*['"]([^'"]{1,30})['"]/i)
+    const titleMatch = codeWithoutSummary.match(/this\.add\.text\([^,]+,\s*[^,]+,\s*['"]([^'"]{1,30})['"]/i)
     const title = titleMatch?.[1] ?? userPrompt.slice(0, 25)
 
-    return { type: 'code', title, code: cleaned }
+    return {
+      type: 'code',
+      title,
+      code: codeWithoutSummary,
+      changesSummary: summaryLines.length > 0 ? summaryLines : undefined,
+    }
   } catch (error) {
     console.error('Error generating game code:', error)
     throw error   // let the API route handle this — no silent fallback for code gen

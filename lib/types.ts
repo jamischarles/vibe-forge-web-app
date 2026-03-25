@@ -133,6 +133,7 @@ export interface GameCodeResult {
   type: 'code'
   title: string
   code: string   // complete self-contained JS — no HTML, no <script> tags
+  changesSummary?: string[]  // AI-generated bullet list of what was built/changed
 }
 
 export type GameResult = GameConfigResult | GameCodeResult
