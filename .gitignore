@@ -34,3 +34,6 @@ next-env.d.ts
 
 # generated game scene bundles (compiled from src/game/)
 /public/scenes/
+
+# vote/feedback data
+/data/
