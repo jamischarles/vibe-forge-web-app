@@ -37,6 +37,12 @@ function startPlatformerGame(config: GameConfig) {
     }
 
     create() {
+      // Re-read viewport dimensions (may have changed on orientation switch)
+      W        = window.innerWidth;
+      H        = window.innerHeight;
+      GROUND_Y = Math.floor(H * 0.84);
+      ROW_SPACING = Math.floor((GROUND_Y - H * 0.1) / (NUM_ROWS + 1));
+
       this.gameOver    = false;
       this.score       = 0;
       this.heroVY      = 0;      // vertical velocity (px/s)
@@ -141,7 +147,30 @@ function startPlatformerGame(config: GameConfig) {
         this.input.on('pointerup',   ()          => { this.pointerDown = false; });
       }
 
+      // ── Restart scene on orientation change so layout adapts ──────────────
+      this._orientW = W;
+      this._orientH = H;
+      this._resizeHandler = () => {
+        var nw = window.innerWidth, nh = window.innerHeight;
+        // Only restart if aspect ratio flipped (portrait ↔ landscape)
+        var wasLandscape = this._orientW > this._orientH;
+        var nowLandscape = nw > nh;
+        if (wasLandscape !== nowLandscape) {
+          // Resize the Phaser game canvas to match new viewport
+          this.scale.resize(nw, nh);
+          this.scene.restart();
+        }
+      };
+      window.addEventListener('resize', this._resizeHandler);
+
       window.parent.postMessage({ type: 'GAME_READY' }, '*');
+    }
+
+    shutdown() {
+      if (this._resizeHandler) {
+        window.removeEventListener('resize', this._resizeHandler);
+        this._resizeHandler = null;
+      }
     }
 
     // ── Platform generation ─────────────────────────────────────────────────────

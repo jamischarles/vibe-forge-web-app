@@ -1205,7 +1205,7 @@ export default function Home() {
                    pb-14 keeps the canvas above the fixed bottom nav bar.
           Desktop: normal flex-1 item — absolute/inset/pb reset by lg: classes.
       ───────────────────────────────────────────────────────────────────────── */}
-      <div className="absolute inset-0 z-0 pb-14 bg-gray-900 lg:relative lg:inset-auto lg:pb-0 lg:flex-1 lg:flex lg:flex-col">
+      <div className="absolute inset-0 z-0 pb-14 pb-landscape-0 bg-gray-900 lg:relative lg:inset-auto lg:pb-0 lg:flex-1 lg:flex lg:flex-col">
         <iframe
           ref={iframeRef}
           src="/game.html"
@@ -1226,7 +1226,7 @@ export default function Home() {
       </div>
 
       {/* ── Mobile bottom navigation — hidden on desktop ── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-gray-900/95 backdrop-blur-md border-t border-gray-700 flex h-nav">
+      <nav className="lg:hidden hide-landscape fixed bottom-0 inset-x-0 z-50 bg-gray-900/95 backdrop-blur-md border-t border-gray-700 flex h-nav">
         <button
           onClick={() => switchMobileView('chat')}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 pb-safe text-xs font-medium transition-colors ${
