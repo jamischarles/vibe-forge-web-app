@@ -12,9 +12,15 @@ function startShooterGame(config: GameConfig) {
   var ENEMY_FR_BASE  = Math.max(800, Math.min(4000, SC.enemyFireRate    || 2000));
   var MAX_ENEMIES    = Math.max(2,   Math.min(8,    SC.maxEnemies       || 4));
   var PROJ_SPEED     = Math.max(200, Math.min(700,  SC.projectileSpeed  || 450));
-  var HERO_RADIUS    = 18;
-  var ENEMY_RADIUS   = 18;
-  var BULLET_RADIUS  = 6;
+  // ── Visual / sizing config ───────────────────────────────────────────────
+  var ARENA_SCALE    = Math.max(0.6, Math.min(1.4, SC.arenaScale    || 1.0));
+  var WALL_THICK     = Math.max(10,  Math.min(40,  SC.wallThickness || 20));
+  var ENTITY_SCALE   = Math.max(0.7, Math.min(1.5, SC.entityScale   || 1.0));
+  var FLOOR_TILE     = Math.max(24,  Math.min(96,  SC.floorTile     || 56));
+  var WALL_STYLE: string = SC.wallStyle || 'box';
+  var HERO_RADIUS    = Math.round(18 * ENTITY_SCALE);
+  var ENEMY_RADIUS   = Math.round(18 * ENTITY_SCALE);
+  var BULLET_RADIUS  = Math.max(4, Math.round(6 * ENTITY_SCALE));
   var HERO_SPEED     = Math.max(150, Math.min(400,  config.speed        || 220));
   // ── Grenade + Fog config ─────────────────────────────────────────────────
   var GRENADE_TYPE   = SC.grenadeType   || null;
@@ -90,7 +96,7 @@ function startShooterGame(config: GameConfig) {
       } else {
         this.cameras.main.setBackgroundColor(config.backgroundColor || '#2d4a2d');
         // Subtle checkerboard floor — alternating tiles +22 brightness
-        var tileSize = 56;
+        var tileSize = FLOOR_TILE;
         var floorG = this.add.graphics().setDepth(-1);
         var bgRaw = (config.backgroundColor || '#2d4a2d').replace('#','');
         while (bgRaw.length < 6) bgRaw = '0' + bgRaw;
@@ -108,6 +114,12 @@ function startShooterGame(config: GameConfig) {
       }
       // Arena border
       this.add.rectangle(W/2, H/2, W-8, H-8, 0xffffff, 0).setStrokeStyle(3, 0xffffff, 0.2).setDepth(0);
+
+      // Apply arena scale (camera zoom)
+      if (ARENA_SCALE !== 1.0) {
+        this.cameras.main.setZoom(ARENA_SCALE);
+        this.cameras.main.centerOn(W/2, H/2);
+      }
 
       // Derive wall color from backgroundColor (darker tint)
       var bgHex = (config.backgroundColor || '#2d4a2d').replace('#', '');
@@ -131,12 +143,13 @@ function startShooterGame(config: GameConfig) {
       } else {
         this.heroX = W/2; this.heroY = H/2;
       }
+      var heroDispSize = Math.round(44 * ENTITY_SCALE);
       var useHeroSpr = config.heroSpriteId && this.textures.exists('hero-spr');
       if (useHeroSpr) {
-        this.heroObj = this.add.image(this.heroX, this.heroY, 'hero-spr').setDisplaySize(44,44).setOrigin(0.5).setDepth(5);
+        this.heroObj = this.add.image(this.heroX, this.heroY, 'hero-spr').setDisplaySize(heroDispSize,heroDispSize).setOrigin(0.5).setDepth(5);
       } else {
         this.heroObj = this.add.text(this.heroX, this.heroY, config.heroEmoji || '🧑', {
-          fontSize: '44px', fontFamily: 'Arial'
+          fontSize: heroDispSize + 'px', fontFamily: 'Arial'
         }).setOrigin(0.5).setDepth(5);
       }
       this.useHeroSpr  = useHeroSpr;
@@ -234,67 +247,139 @@ function startShooterGame(config: GameConfig) {
       var placedCount = 0;
       var self = this;
       var reserved = reservedRects || [];
+      var t = WALL_THICK; // wall thickness
+      var ht = Math.round(t / 2);
 
-      // Helper: place a random wall cluster at (wx, wy) using one of 3 types
-      function placeCluster(wx: number, wy: number) {
-        var rtype = Phaser.Math.Between(0, 2);
-        if (rtype === 0) {
-          var rw = Phaser.Math.Between(80, 130);
-          self.addWall(wx - rw/2, wy - 10, rw, 20);
-        } else if (rtype === 1) {
-          var rh = Phaser.Math.Between(80, 130);
-          self.addWall(wx - 10, wy - rh/2, 20, rh);
-        } else {
-          var aw = Phaser.Math.Between(60, 100);
-          var bh = Phaser.Math.Between(50, 90);
-          self.addWall(wx - aw/2, wy - 10, aw, 20);
-          self.addWall(wx - 10,   wy + 10,  20, bh);
+      function isInReserved(px: number, py: number): boolean {
+        for (var ri = 0; ri < reserved.length; ri++) {
+          var rr = reserved[ri];
+          if (px > rr.x && px < rr.x + rr.w && py > rr.y && py < rr.y + rr.h) return true;
         }
+        return false;
       }
 
-      // 1. Center T-shape anchor (always placed when WALL_COUNT >= 4)
-      if (WALL_COUNT >= 4) {
-        var hw = Phaser.Math.Between(90, 120);
-        var vh = Phaser.Math.Between(50, 80);
-        this.addWall(W/2 - hw/2, H/2 - 30, hw, 20); // horizontal bar
-        this.addWall(W/2 - 10,   H/2 - 10,  20, vh); // vertical stem
-        placedCount++;
-      }
-
-      // 2. One quadrant anchor per quadrant (when WALL_COUNT >= 8)
-      if (WALL_COUNT >= 8) {
-        var quadrants = [
-          { x: margin + 10,  y: margin + 10,  w: W/2 - margin - 30, h: H/2 - margin - 30 }, // TL
-          { x: W/2 + 20,     y: margin + 10,  w: W/2 - margin - 30, h: H/2 - margin - 30 }, // TR
-          { x: margin + 10,  y: H/2 + 20,     w: W/2 - margin - 30, h: H/2 - margin - 30 }, // BL
-          { x: W/2 + 20,     y: H/2 + 20,     w: W/2 - margin - 30, h: H/2 - margin - 30 }, // BR
-        ];
-        for (var q = 0; q < quadrants.length && placedCount < WALL_COUNT; q++) {
-          var qz = quadrants[q];
-          var qx = Phaser.Math.Between(qz.x + 20, qz.x + qz.w - 20);
-          var qy = Phaser.Math.Between(qz.y + 20, qz.y + qz.h - 20);
-          placeCluster(qx, qy);
+      // ── Wall layout algorithms ──────────────────────────────────────────
+      if (WALL_STYLE === 'corridor') {
+        // Long parallel walls creating lanes
+        var laneCount = Math.min(WALL_COUNT, Math.floor(WALL_COUNT / 2) + 1);
+        var spacing = H / (laneCount + 1);
+        for (var li = 0; li < laneCount && placedCount < WALL_COUNT; li++) {
+          var ly = spacing * (li + 1);
+          var lw = Phaser.Math.Between(Math.round(W * 0.3), Math.round(W * 0.6));
+          var lx = Phaser.Math.Between(margin, W - margin - lw);
+          if (Math.abs(ly - H/2) < clearR && Math.abs(lx + lw/2 - W/2) < clearR) continue;
+          if (isInReserved(lx + lw/2, ly)) continue;
+          self.addWall(lx, ly - ht, lw, t);
+          placedCount++;
+          // Add perpendicular connectors for remaining count
+          if (placedCount < WALL_COUNT && Math.random() < 0.5) {
+            var cx = li % 2 === 0 ? lx : lx + lw - t;
+            var ch = Phaser.Math.Between(40, 80);
+            self.addWall(cx, ly, t, ch);
+            placedCount++;
+          }
+        }
+      } else if (WALL_STYLE === 'scattered') {
+        // Many small obstacles scattered across the arena
+        for (var si = 0; si < WALL_COUNT && placedCount < WALL_COUNT; si++) {
+          for (var attempt = 0; attempt < 40; attempt++) {
+            var sx = Phaser.Math.Between(margin, W - margin);
+            var sy = Phaser.Math.Between(margin, H - margin);
+            if (Math.sqrt((sx-W/2)*(sx-W/2)+(sy-H/2)*(sy-H/2)) < clearR) continue;
+            if (isInReserved(sx, sy)) continue;
+            var sw = Phaser.Math.Between(Math.round(t * 1.5), Math.round(t * 3));
+            var sh = Phaser.Math.Between(Math.round(t * 1.5), Math.round(t * 3));
+            self.addWall(sx - sw/2, sy - sh/2, sw, sh);
+            placedCount++;
+            break;
+          }
+        }
+      } else if (WALL_STYLE === 'maze') {
+        // Interconnected wall segments forming paths
+        var cellW = Math.round(W / 6);
+        var cellH = Math.round(H / 5);
+        var cells: boolean[][] = [];
+        for (var mr = 0; mr < 5; mr++) {
+          cells[mr] = [];
+          for (var mc = 0; mc < 6; mc++) cells[mr][mc] = false;
+        }
+        // Randomly activate cells for wall placement
+        var mazeSlots = Math.min(WALL_COUNT, 20);
+        for (var mi = 0; mi < mazeSlots && placedCount < WALL_COUNT; mi++) {
+          var mr2 = Phaser.Math.Between(0, 4);
+          var mc2 = Phaser.Math.Between(0, 5);
+          if (cells[mr2][mc2]) continue;
+          var mx = mc2 * cellW + cellW / 2;
+          var my = mr2 * cellH + cellH / 2;
+          if (Math.sqrt((mx-W/2)*(mx-W/2)+(my-H/2)*(my-H/2)) < clearR) continue;
+          if (isInReserved(mx, my)) continue;
+          cells[mr2][mc2] = true;
+          // Place H or V segment
+          if (Math.random() < 0.5) {
+            self.addWall(mx - cellW/2 + 10, my - ht, cellW - 20, t);
+          } else {
+            self.addWall(mx - ht, my - cellH/2 + 10, t, cellH - 20);
+          }
           placedCount++;
         }
-      }
+      } else {
+        // Default 'box' style — original algorithm with configurable thickness
 
-      // 3. Random fill for remaining slots
-      var remaining = WALL_COUNT - placedCount;
-      for (var i = 0; i < remaining; i++) {
-        var found = false;
-        for (var attempt = 0; attempt < 40 && !found; attempt++) {
-          var wx = Phaser.Math.Between(margin, W - margin);
-          var wy = Phaser.Math.Between(margin, H - margin);
-          if (Math.sqrt((wx-W/2)*(wx-W/2)+(wy-H/2)*(wy-H/2)) < clearR) continue;
-          // Avoid reserved rects (CTF bases, etc.)
-          var inReserved = false;
-          for (var ri = 0; ri < reserved.length; ri++) {
-            var rr = reserved[ri];
-            if (wx > rr.x && wx < rr.x + rr.w && wy > rr.y && wy < rr.y + rr.h) { inReserved = true; break; }
+        // Helper: place a random wall cluster at (wx, wy)
+        function placeCluster(wx: number, wy: number) {
+          var rtype = Phaser.Math.Between(0, 2);
+          if (rtype === 0) {
+            var rw = Phaser.Math.Between(80, 130);
+            self.addWall(wx - rw/2, wy - ht, rw, t);
+          } else if (rtype === 1) {
+            var rh = Phaser.Math.Between(80, 130);
+            self.addWall(wx - ht, wy - rh/2, t, rh);
+          } else {
+            var aw = Phaser.Math.Between(60, 100);
+            var bh = Phaser.Math.Between(50, 90);
+            self.addWall(wx - aw/2, wy - ht, aw, t);
+            self.addWall(wx - ht,   wy + ht,  t, bh);
           }
-          if (inReserved) continue;
-          placeCluster(wx, wy);
-          found = true;
+        }
+
+        // 1. Center T-shape anchor (when WALL_COUNT >= 4)
+        if (WALL_COUNT >= 4) {
+          var hw = Phaser.Math.Between(90, 120);
+          var vh = Phaser.Math.Between(50, 80);
+          self.addWall(W/2 - hw/2, H/2 - 30, hw, t);
+          self.addWall(W/2 - ht,   H/2 - ht, t, vh);
+          placedCount++;
+        }
+
+        // 2. Quadrant anchors (when WALL_COUNT >= 8)
+        if (WALL_COUNT >= 8) {
+          var quadrants = [
+            { x: margin + 10,  y: margin + 10,  w: W/2 - margin - 30, h: H/2 - margin - 30 },
+            { x: W/2 + 20,     y: margin + 10,  w: W/2 - margin - 30, h: H/2 - margin - 30 },
+            { x: margin + 10,  y: H/2 + 20,     w: W/2 - margin - 30, h: H/2 - margin - 30 },
+            { x: W/2 + 20,     y: H/2 + 20,     w: W/2 - margin - 30, h: H/2 - margin - 30 },
+          ];
+          for (var q = 0; q < quadrants.length && placedCount < WALL_COUNT; q++) {
+            var qz = quadrants[q];
+            var qx = Phaser.Math.Between(qz.x + 20, qz.x + qz.w - 20);
+            var qy = Phaser.Math.Between(qz.y + 20, qz.y + qz.h - 20);
+            placeCluster(qx, qy);
+            placedCount++;
+          }
+        }
+
+        // 3. Random fill for remaining
+        var remaining = WALL_COUNT - placedCount;
+        for (var i = 0; i < remaining; i++) {
+          var found = false;
+          for (var attempt = 0; attempt < 40 && !found; attempt++) {
+            var wx = Phaser.Math.Between(margin, W - margin);
+            var wy = Phaser.Math.Between(margin, H - margin);
+            if (Math.sqrt((wx-W/2)*(wx-W/2)+(wy-H/2)*(wy-H/2)) < clearR) continue;
+            if (isInReserved(wx, wy)) continue;
+            placeCluster(wx, wy);
+            found = true;
+          }
         }
       }
     }
@@ -677,11 +762,42 @@ function startShooterGame(config: GameConfig) {
     buildZones() {
       var W = this.W, H = this.H;
       var cx = W/2, cy = H/2;
+
+      if (WALL_STYLE === 'corridor') {
+        // Corridor: spawn from left/right edges (lane ends)
+        return [
+          { x: 20,       y: 20,    w: 80,    h: H-40 },  // left strip
+          { x: W-100,    y: 20,    w: 80,    h: H-40 },  // right strip
+          { x: cx-60,    y: 20,    w: 120,   h: 80 },    // top center
+          { x: cx-60,    y: H-100, w: 120,   h: 80 },    // bottom center
+        ];
+      }
+      if (WALL_STYLE === 'maze') {
+        // Maze: more zones spread across grid for varied spawns
+        var third = W/3, thirdH = H/3;
+        return [
+          { x: 20,        y: 20,        w: third-30,  h: thirdH-30 },  // TL
+          { x: third*2+10,y: 20,        w: third-30,  h: thirdH-30 },  // TR
+          { x: 20,        y: thirdH*2+10,w: third-30,  h: thirdH-30 }, // BL
+          { x: third*2+10,y: thirdH*2+10,w: third-30,  h: thirdH-30 }, // BR
+          { x: third+10,  y: thirdH+10, w: third-20,  h: thirdH-20 },  // center
+        ];
+      }
+      if (WALL_STYLE === 'scattered') {
+        // Scattered: wider zones for more spread-out spawns
+        return [
+          { x: 20,    y: 20,    w: cx-30, h: cy-30 },
+          { x: cx+10, y: 20,    w: cx-30, h: cy-30 },
+          { x: 20,    y: cy+10, w: cx-30, h: cy-30 },
+          { x: cx+10, y: cy+10, w: cx-30, h: cy-30 },
+        ];
+      }
+      // Default (box): original 4-quadrant zones
       return [
-        { x: 20,    y: 20,    w: cx-40, h: cy-40 }, // top-left
-        { x: cx+20, y: 20,    w: cx-40, h: cy-40 }, // top-right
-        { x: 20,    y: cy+20, w: cx-40, h: cy-40 }, // bottom-left
-        { x: cx+20, y: cy+20, w: cx-40, h: cy-40 }, // bottom-right
+        { x: 20,    y: 20,    w: cx-40, h: cy-40 },
+        { x: cx+20, y: 20,    w: cx-40, h: cy-40 },
+        { x: 20,    y: cy+20, w: cx-40, h: cy-40 },
+        { x: cx+20, y: cy+20, w: cx-40, h: cy-40 },
       ];
     }
 
@@ -707,11 +823,12 @@ function startShooterGame(config: GameConfig) {
       } while (attempts < 20 && this.isPositionInWall(x, y, stats.radius));
 
       var obj: any;
+      var enemyDispSize = Math.round(44 * ENTITY_SCALE);
       if (this.useEnemySpr) {
-        obj = this.add.image(x, y, 'enemy-spr').setDisplaySize(44,44).setOrigin(0.5).setDepth(4);
+        obj = this.add.image(x, y, 'enemy-spr').setDisplaySize(enemyDispSize,enemyDispSize).setOrigin(0.5).setDepth(4);
       } else {
         obj = this.add.text(x, y, config.enemyEmoji || '🎭', {
-          fontSize: '44px', fontFamily: 'Arial'
+          fontSize: enemyDispSize + 'px', fontFamily: 'Arial'
         }).setOrigin(0.5).setDepth(4);
       }
       if (stats.scale !== 1.0) obj.setScale(stats.scale);
@@ -764,11 +881,15 @@ function startShooterGame(config: GameConfig) {
         this.score++;
         this.scoreTxt.setText((GAME_MODE === 'ctf' ? 'Kills: ' : 'Score: ') + this.score);
         this.sounds.score && this.sounds.score();
-        // Respawn in same zone after 3s
+        // Respawn in a random zone after variable delay (faster as game progresses)
         var self = this;
-        var zone = e.patrolZone;
-        this.time.delayedCall(3000, function() {
-          if (!self.isGameOver) self.spawnEnemy(zone);
+        var zones = this.zones;
+        var respawnZone = zones[Phaser.Math.Between(0, zones.length - 1)];
+        var baseRespawn = FOG_OF_WAR ? 4000 : 3000; // fog games: slower respawn for stealth pacing
+        var rampReduction = Math.min(1500, Math.floor(self.rampTimer / 60000) * 300);
+        var respawnMs = Math.max(1500, baseRespawn - rampReduction + Phaser.Math.Between(-500, 500));
+        this.time.delayedCall(respawnMs, function() {
+          if (!self.isGameOver) self.spawnEnemy(respawnZone);
         });
       } else {
         // Flash and seek cover
@@ -804,12 +925,18 @@ function startShooterGame(config: GameConfig) {
       var roleTarget = (this.modeState && e.aiRole) ? AIRoles.getTarget(e, this.modeState, hx, hy) : null;
       var targetX = roleTarget ? roleTarget.x : hx;
       var targetY = roleTarget ? roleTarget.y : hy;
-      var alertRange = roleTarget ? (roleTarget.alertRange || 280) : 280;
+      var baseAlertRange = roleTarget ? (roleTarget.alertRange || 280) : 280;
+      // Fog of war reduces enemy detection range — enemies can't see as far in darkness
+      var alertRange = (FOG_OF_WAR) ? Math.min(baseAlertRange, FOG_RADIUS * 0.75) : baseAlertRange;
 
       var dx = targetX - e.x, dy = targetY - e.y;
       var dist = Math.sqrt(dx*dx + dy*dy);
       // LOS always checked against hero (for shooting) and target (for movement)
       var losHero   = this.hasLOS(e.x, e.y, hx, hy);
+      // In fog, even with LOS, hero must be within fog-based alert range to be "seen"
+      var heroDx2 = hx - e.x, heroDy2 = hy - e.y;
+      var heroDist2 = Math.sqrt(heroDx2*heroDx2 + heroDy2*heroDy2);
+      if (FOG_OF_WAR && heroDist2 > alertRange) losHero = false;
       var losTarget = roleTarget ? this.hasLOS(e.x, e.y, targetX, targetY) : losHero;
       var los = losHero;
 
@@ -847,7 +974,7 @@ function startShooterGame(config: GameConfig) {
           var pRes = this.resolveWallCollision(pnx, pny, er);
           e.x = pRes.x; e.y = pRes.y;
         } else {
-          var spd = e.patrolSpeed;
+          var spd = FOG_OF_WAR ? e.patrolSpeed * 0.7 : e.patrolSpeed; // slower patrol in fog
           if (e.patrolAxis === 'x') {
             e.x += e.patrolDir * spd * dt;
             if (e.x > e.patrolZone.x + e.patrolZone.w - 20) e.patrolDir = -1;
@@ -856,6 +983,10 @@ function startShooterGame(config: GameConfig) {
             e.y += e.patrolDir * spd * dt;
             if (e.y > e.patrolZone.y + e.patrolZone.h - 20) e.patrolDir = -1;
             if (e.y < e.patrolZone.y + 20)                  e.patrolDir =  1;
+          }
+          // In fog: enemies occasionally switch patrol axis for less predictable movement
+          if (FOG_OF_WAR && Math.random() < 0.003) {
+            e.patrolAxis = e.patrolAxis === 'x' ? 'y' : 'x';
           }
         }
         var patRes = this.resolveWallCollision(e.x, e.y, er);
@@ -872,8 +1003,10 @@ function startShooterGame(config: GameConfig) {
           var res = this.resolveWallCollision(nx, ny, er);
           e.x = res.x; e.y = res.y;
         }
-        if (dist < 150 && los) { e.state = 'shoot'; e.shootTimer = 0; }
-        if (dist > 380 || !los) e.state = 'patrol';
+        var shootDist = FOG_OF_WAR ? 100 : 150; // fog: must get closer before firing
+        var loseDist = FOG_OF_WAR ? 250 : 380; // fog: lose interest faster
+        if (dist < shootDist && los) { e.state = 'shoot'; e.shootTimer = 0; }
+        if (dist > loseDist || !los) e.state = 'patrol';
 
       } else if (e.state === 'shoot') {
         var eFireRate = this.currentEnemyFireRate * (e.frMult || 1.0);
@@ -894,11 +1027,34 @@ function startShooterGame(config: GameConfig) {
             this.spawnEnemyGrenade(e);
           }
         }
-        // Scouts can't enter shoot state — fall back to alert
-        if (e.shootsBack === false) { e.state = 'alert'; }
-        if (!los || dist > 240) e.state = 'alert';
-        // Occasionally seek cover when damaged
-        if (e.hp < e.maxHp && Math.random() < 0.008) e.state = 'cover';
+        // Scouts: hit-and-run — dart toward hero, then flee when close
+        if (e.shootsBack === false) {
+          // When scout reaches shoot range, bounce away at high speed
+          e.state = 'fleeing';
+          e.fleeTimer = 1.5; // flee for 1.5 seconds
+          e.fleeAngle = Math.atan2(e.y - hy, e.x - hx); // away from hero
+        }
+        var shootLoseDist = FOG_OF_WAR ? 160 : 240;
+        if (!los || dist > shootLoseDist) e.state = 'alert';
+        // Occasionally seek cover when damaged (more likely in fog — enemies are cautious)
+        var coverChance = FOG_OF_WAR ? 0.015 : 0.008;
+        if (e.hp < e.maxHp && Math.random() < coverChance) e.state = 'cover';
+
+      } else if (e.state === 'fleeing') {
+        // Scouts flee away from hero at boosted speed
+        e.fleeTimer -= dt;
+        if (e.fleeTimer <= 0) {
+          e.state = 'patrol';
+        } else {
+          var fleeSpd = (e.alertSpeed || 95) * 1.5;
+          var fnx = e.x + Math.cos(e.fleeAngle) * fleeSpd * dt;
+          var fny = e.y + Math.sin(e.fleeAngle) * fleeSpd * dt;
+          var fres = this.resolveWallCollision(fnx, fny, er);
+          e.x = fres.x; e.y = fres.y;
+          // Bounce off edges
+          if (e.x <= er + 5 || e.x >= this.W - er - 5) e.fleeAngle = Math.PI - e.fleeAngle;
+          if (e.y <= er + 5 || e.y >= this.H - er - 5) e.fleeAngle = -e.fleeAngle;
+        }
 
       } else if (e.state === 'cover') {
         var target = this.findCoverPoint(e);
@@ -1127,10 +1283,15 @@ function startShooterGame(config: GameConfig) {
 
     updateDifficultyRamp(delta: number) {
       this.rampTimer += delta;
-      var ramp30 = Math.floor(this.rampTimer / 30000);
-      this.currentEnemyFireRate = Math.max(800, ENEMY_FR_BASE - ramp30 * 200);
-      var ramp60 = Math.floor(this.rampTimer / 60000);
-      var newMax = Math.min(8, MAX_ENEMIES + ramp60);
+      // Fire rate ramp: steeper for fewer enemies, gentler for many
+      var rampInterval = MAX_ENEMIES <= 3 ? 25000 : 35000; // aggressive if fewer enemies
+      var rampSteps = Math.floor(this.rampTimer / rampInterval);
+      var frReduction = rampSteps * (FOG_OF_WAR ? 150 : 200); // fog = slower ramp
+      this.currentEnemyFireRate = Math.max(800, ENEMY_FR_BASE - frReduction);
+      // Enemy count ramp: every 45-75s based on base count
+      var enemyRampInterval = MAX_ENEMIES >= 6 ? 75000 : 45000;
+      var rampEnemySteps = Math.floor(this.rampTimer / enemyRampInterval);
+      var newMax = Math.min(8, MAX_ENEMIES + rampEnemySteps);
       if (newMax > this.currentMaxEnemies) {
         this.currentMaxEnemies = newMax;
         var zone = this.zones[Phaser.Math.Between(0, this.zones.length - 1)];
