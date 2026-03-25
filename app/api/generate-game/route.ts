@@ -30,12 +30,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Config path: runner or topdown template
-    const config = await generateGameConfig(
+    const result = await generateGameConfig(
       trimmed,
       currentConfig as GameConfig | undefined,
       mobile === true
     )
-    return NextResponse.json({ type: 'config', config })
+    return NextResponse.json({
+      type: 'config',
+      config: result.config,
+      designPlan: result.designPlan,
+      designBrief: result.designBrief,
+    })
 
   } catch (error) {
     console.error('Generate game error:', error)

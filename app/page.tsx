@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, Gamepad2, Sparkles, RefreshCw, MessageSquare, Settings, Code2 } from 'lucide-react'
 import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED_MAX, VoteRecord, DownvoteCategory, DOWNVOTE_LABELS } from '@/lib/types'
+import type { DesignPlan, DesignBrief } from '@/lib/game-design-engine'
 import { HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS, CharacterAsset, BackgroundAsset } from '@/lib/assets'
 
 type AppState = 'idle' | 'listening' | 'thinking' | 'playing'
@@ -890,18 +891,39 @@ export default function Home() {
       } else {
         // Config game (runner or topdown)
         const config: GameConfig = data.config
+        const plan: DesignPlan | undefined = data.designPlan
+        const brief: DesignBrief | undefined = data.designBrief
         const isUpdate = gameMode !== null
         const isTopDown = config.template === 'topdown'
 
+        // Build game creation message
+        let baseMsg = isUpdate
+          ? `Updated! ${config.heroEmoji} vs ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
+          : config.template === 'shooter'
+            ? `I made "${config.title}"! ${config.heroEmoji} vs ${config.enemyEmoji} — WASD to move, click/SPACE to shoot! 🔫`
+            : isTopDown
+              ? `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji} — use WASD or tap to move! ⬆️`
+              : `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump! 🎮`
+
+        // Append design brief (LLM reasoning) if present
+        if (brief && brief.style && !isUpdate) {
+          baseMsg += `\n\n🎨 Design vision: ${brief.style}`
+          if (brief.mapIntent) baseMsg += ` — ${brief.mapIntent}`
+          if (brief.features?.length) baseMsg += `\nFeatures: ${brief.features.join(', ')}`
+          if (brief.featureReasoning?.length) {
+            baseMsg += '\n' + brief.featureReasoning.map(r => `  → ${r}`).join('\n')
+          }
+          if (brief.difficultyArc) baseMsg += `\nDifficulty: ${brief.difficultyArc}`
+        }
+
+        // Append design engine adjustments if any rules fired
+        if (plan && plan.rules.length > 0) {
+          baseMsg += '\n\n🧠 Balance adjustments:\n' + plan.rules.map(r => `• ${r.reason}`).join('\n')
+        }
+
         const assistantMessage: ChatMessage = {
           role: 'assistant',
-          content: isUpdate
-            ? `Updated! ${config.heroEmoji} vs ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
-            : config.template === 'shooter'
-              ? `I made "${config.title}"! ${config.heroEmoji} vs ${config.enemyEmoji} — WASD to move, click/SPACE to shoot! 🔫`
-              : isTopDown
-                ? `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji} — use WASD or tap to move! ⬆️`
-                : `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump! 🎮`,
+          content: baseMsg,
         }
         setMessages(prev => [...prev, assistantMessage])
         setCurrentConfig(config)
@@ -1198,7 +1220,7 @@ export default function Home() {
                   msg.role === 'user'
                     ? 'bg-green-600 text-white rounded-br-md'
                     : 'bg-gray-700 text-gray-100 rounded-bl-md'
-                }`}>
+                }`} style={{ whiteSpace: 'pre-wrap' }}>
                   {msg.content}
                 </div>
                 {msg.role === 'assistant' && (

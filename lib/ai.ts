@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { GameConfig, SPEED_MIN, SPEED_MAX, GameCodeResult } from './types'
 import { getCatalogSummary, ALL_CHARACTER_IDS, ALL_BG_IDS } from './assets'
+import { applyDesignRules, type DesignPlan, type DesignBrief } from './game-design-engine'
 
 export type { GameConfig }
 export { SPEED_MIN, SPEED_MAX }
@@ -317,19 +318,100 @@ function buildMobileConstraint(mobile: boolean): string {
   return `\n\nOUTPUT TARGET: Mobile (iPad/tablet). Use large emoji sizes (64px+), tap/swipe controls only, no keyboard-only mechanics.`
 }
 
+// ── Pass 1: Design Brief (LLM game-design reasoning) ─────────────────────
+
+const DESIGN_BRIEF_PROMPT = `You are a game designer reasoning about how to build a fun, balanced game for a kid.
+
+Given a game description, output a JSON design brief with your reasoning about what features to include and why.
+
+Think about:
+- What game STYLE fits best (tactical, chaotic, arcade, stealth, competitive)
+- MAP DESIGN: how many obstacles/walls and why (open arena vs dense corridors)
+- Which FEATURES complement each other (fog + smoke, CTF + grenades, etc.)
+- DIFFICULTY ARC: how should the game feel at the start vs later
+- Key parameter CHOICES with your reasoning
+
+Rules:
+- Be opinionated — pick a clear style direction, don't be generic
+- Consider feature SYNERGIES: which combinations create interesting gameplay
+- Consider feature CONFLICTS: which combinations would be frustrating
+- Keep it brief — 1-2 sentences per field
+
+Respond with ONLY valid JSON:
+{
+  "style": "tactical",
+  "mapIntent": "dense corridors with flanking routes near flag bases",
+  "features": ["fog of war", "frag grenades", "CTF mode"],
+  "featureReasoning": ["fog creates tension and rewards map knowledge", "grenades let you breach defended positions", "CTF gives purpose beyond just kills"],
+  "difficultyArc": "starts moderate with 4 enemies, ramps every 30s with faster enemy fire",
+  "keyChoices": ["wallCount:8 — dense cover for tactical flag runs", "heroHp:3 — survivability for objective play", "fogRadius:160 — tight enough for tension, wide enough for navigation"]
+}`
+
+async function generateDesignBrief(userPrompt: string): Promise<DesignBrief | null> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: DESIGN_BRIEF_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 500,
+      response_format: { type: 'json_object' },
+    })
+
+    const content = completion.choices[0]?.message?.content
+    if (!content) return null
+
+    const brief = JSON.parse(content) as DesignBrief
+
+    // Validate required fields
+    if (!brief.style || !brief.features || !Array.isArray(brief.features)) return null
+
+    return brief
+  } catch (error) {
+    console.error('Design brief generation failed (non-fatal):', error)
+    return null
+  }
+}
+
+function briefToContext(brief: DesignBrief): string {
+  return `\n\n[DESIGN BRIEF from game designer — use this to guide your config choices]:
+Style: ${brief.style}
+Map intent: ${brief.mapIntent || 'default'}
+Features to include: ${brief.features.join(', ')}
+Feature reasoning: ${brief.featureReasoning?.join('; ') || 'none'}
+Difficulty arc: ${brief.difficultyArc || 'default'}
+Key choices: ${brief.keyChoices?.join('; ') || 'none'}
+IMPORTANT: Follow this brief when setting config values. The brief's feature and parameter recommendations should inform your JSON output.`
+}
+
+// ── Pass 2: Config Generation (now optionally informed by design brief) ───
+
+export interface GenerateResult {
+  config: GameConfig
+  designPlan: DesignPlan
+  designBrief: DesignBrief | null
+}
+
 export async function generateGameConfig(
   userPrompt: string,
   currentConfig?: GameConfig,
   mobile = false
-): Promise<GameConfig> {
+): Promise<GenerateResult> {
   const isUpdate = !!currentConfig
 
   try {
+    // Pass 1: Generate design brief (new games only — updates skip this)
+    const designBrief = isUpdate ? null : await generateDesignBrief(userPrompt)
+
     const systemPrompt = (isUpdate ? UPDATE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT) + buildMobileConstraint(mobile)
 
+    // Inject design brief as context for pass 2
+    const briefContext = designBrief ? briefToContext(designBrief) : ''
     const userMessage = isUpdate
       ? `Current game config:\n${JSON.stringify(currentConfig, null, 2)}\n\nWhat the kid wants to change: "${userPrompt}"`
-      : userPrompt
+      : userPrompt + briefContext
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -343,7 +425,10 @@ export async function generateGameConfig(
     })
 
     const content = completion.choices[0]?.message?.content
-    if (!content) return isUpdate ? currentConfig : DEFAULT_CONFIG
+    if (!content) {
+      const fallback = isUpdate ? currentConfig : DEFAULT_CONFIG
+      return { config: fallback, designPlan: { rules: [], summary: 'No AI response.' }, designBrief: null }
+    }
 
     const config = JSON.parse(content) as GameConfig
 
@@ -422,10 +507,14 @@ export async function generateGameConfig(
       if ((config.shooter as unknown) === null) delete config.shooter
     }
 
-    return config
+    // Pass 3: Apply design engine co-dependency rules
+    const designPlan = applyDesignRules(config)
+
+    return { config, designPlan, designBrief }
   } catch (error) {
     console.error('Error generating game config:', error)
-    return isUpdate ? currentConfig : DEFAULT_CONFIG
+    const fallback = isUpdate ? currentConfig : DEFAULT_CONFIG
+    return { config: fallback, designPlan: { rules: [], summary: 'Error fallback.' }, designBrief: null }
   }
 }
 
