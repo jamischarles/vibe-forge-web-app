@@ -1066,11 +1066,16 @@ export default function Home() {
     if (!response.ok) throw new Error(data.error || 'Something went wrong')
 
     if (data.type === 'code') {
+      const codeSummary: string[] = [`Game: ${data.title}`]
+      if (gameMode === 'code') {
+        codeSummary.push(`Change requested: ${promptText}`)
+      }
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: gameMode === 'code'
           ? `Rebuilt "${data.title}" with your changes! 🕹️ SPACE or tap to play.`
           : `I coded "${data.title}" for you! 🕹️ Press SPACE or tap to play. Tell me what to change!`,
+        changesSummary: codeSummary,
       }
       setMessages(prev => [...prev, assistantMessage])
       setGameMode('code')
