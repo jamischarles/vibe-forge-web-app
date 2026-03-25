@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Game</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -22,10 +22,29 @@
       line-height: 2;
     }
     #placeholder .big { font-size: 48px; }
-    canvas { display: block; }
+    canvas { display: block; touch-action: none; }
+
+    /* Portrait warning overlay for mobile */
+    #rotate-overlay {
+      display: none;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #1a1a2e; color: #ccc;
+      flex-direction: column; align-items: center; justify-content: center;
+      z-index: 99999; font-family: 'Segoe UI', sans-serif; text-align: center;
+    }
+    #rotate-overlay .icon { font-size: 64px; margin-bottom: 16px; }
+    #rotate-overlay .msg  { font-size: 20px; }
+
+    @media (orientation: portrait) and (max-width: 1024px) and (hover: none) {
+      #rotate-overlay { display: flex !important; }
+    }
   </style>
 </head>
 <body>
+  <div id="rotate-overlay">
+    <div class="icon">📱↪️</div>
+    <div class="msg">Please rotate your device to landscape</div>
+  </div>
   <div id="placeholder">
     <div class="big">🎮</div>
     <div>Your game will appear here!</div>
@@ -44,6 +63,9 @@
   <script src="scenes/platformer.js"></script>
 
   <script>
+    // ── Try to lock orientation to landscape (best-effort) ───────────────────
+    try { screen.orientation.lock('landscape-primary').catch(function(){}); } catch(e) {}
+
     // ── Listen for config or generated code from parent page ─────────────────
     window.addEventListener('message', (event) => {
       if (!event.data) return;
