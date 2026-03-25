@@ -11,6 +11,7 @@ function startPlatformerGame(config: GameConfig) {
   var HERO_SPEED = Math.max(150, Math.min(320, config.speed     || 200));
   var JUMP_FORCE = Math.max(520, Math.min(750, config.jumpForce || 630));
   var DOUBLE_JUMP = !!(config.platformer && config.platformer.doubleJump);
+  var IS_TOUCH    = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
   // Distribute 3 platform rows evenly in the space above the ground
   var NUM_ROWS    = 3;
@@ -103,10 +104,10 @@ function startPlatformerGame(config: GameConfig) {
       }).setOrigin(1, 0).setDepth(56);
 
       // Start hint (disappears after 3 s)
-      this.hintTxt = this.add.text(W / 2, H * 0.48,
-        DOUBLE_JUMP
-          ? '← → move  SPACE jump  (double jump enabled!)'
-          : '← → to move  ·  SPACE / tap to jump',
+      var hintMsg = IS_TOUCH
+        ? (DOUBLE_JUMP ? 'Hold edges to move · Tap center to jump (×2!)' : 'Hold edges to move · Tap center to jump')
+        : (DOUBLE_JUMP ? '← → move  SPACE jump  (double jump enabled!)' : '← → to move  ·  SPACE / tap to jump');
+      this.hintTxt = this.add.text(W / 2, H * 0.48, hintMsg,
         { fontSize: '16px', fontFamily: 'monospace', color: '#ffffff', stroke: '#000', strokeThickness: 3 }
       ).setOrigin(0.5).setDepth(57);
       this.time.delayedCall(3200, () => { if (this.hintTxt) { this.hintTxt.destroy(); this.hintTxt = null; } });
@@ -119,15 +120,24 @@ function startPlatformerGame(config: GameConfig) {
       this.input.keyboard!.on('keydown-W',     () => this.doJump());
 
       // ── Touch / pointer input ──────────────────────────────────────────────
-      // Hold left-half → move left; hold right-half → move right; any tap → jump
-      this.input.on('pointerdown', (ptr: any) => {
-        if (this.gameOver) { this.scene.restart(); return; }
-        this.pointerDown = true;
-        this.pointerX    = ptr.x;
-        this.doJump();
-      });
-      this.input.on('pointermove', (ptr: any) => { this.pointerX = ptr.x; });
-      this.input.on('pointerup',   ()          => { this.pointerDown = false; });
+      this.btnLeft  = false;
+      this.btnRight = false;
+
+      if (IS_TOUCH) {
+        this.createMobileTouchZones();
+        // Enable multi-touch so you can move + jump simultaneously
+        this.input.addPointer(2);
+      } else {
+        // Desktop fallback: hold left/right half to move, tap to jump
+        this.input.on('pointerdown', (ptr: any) => {
+          if (this.gameOver) { this.scene.restart(); return; }
+          this.pointerDown = true;
+          this.pointerX    = ptr.x;
+          this.doJump();
+        });
+        this.input.on('pointermove', (ptr: any) => { this.pointerX = ptr.x; });
+        this.input.on('pointerup',   ()          => { this.pointerDown = false; });
+      }
 
       window.parent.postMessage({ type: 'GAME_READY' }, '*');
     }
@@ -197,6 +207,48 @@ function startPlatformerGame(config: GameConfig) {
       }
     }
 
+    // ── Mobile touch zones: shaded left/right edges to move, center tap to jump ─
+    createMobileTouchZones() {
+      var zoneW    = Math.floor(W * 0.25);  // each edge zone is 25% of screen width
+      var alpha    = 0.10;
+      var activeA  = 0.22;
+      var depth    = 90;
+      var self     = this;
+
+      // ── Left edge zone (shaded) ──
+      var leftZone = this.add.rectangle(zoneW / 2, H / 2, zoneW, H, 0x000000, alpha)
+        .setDepth(depth).setScrollFactor(0).setInteractive();
+      var leftArrow = this.add.text(zoneW / 2, H / 2, '◀', {
+        fontSize: '32px', fontFamily: 'Arial', color: '#ffffff',
+      }).setOrigin(0.5).setDepth(depth + 1).setScrollFactor(0).setAlpha(0.3);
+
+      leftZone.on('pointerdown', () => { self.btnLeft = true; leftZone.setAlpha(activeA); leftArrow.setAlpha(0.6); });
+      leftZone.on('pointerup',   () => { self.btnLeft = false; leftZone.setAlpha(alpha); leftArrow.setAlpha(0.3); });
+      leftZone.on('pointerout',  () => { self.btnLeft = false; leftZone.setAlpha(alpha); leftArrow.setAlpha(0.3); });
+
+      // ── Right edge zone (shaded) ──
+      var rightZone = this.add.rectangle(W - zoneW / 2, H / 2, zoneW, H, 0x000000, alpha)
+        .setDepth(depth).setScrollFactor(0).setInteractive();
+      var rightArrow = this.add.text(W - zoneW / 2, H / 2, '▶', {
+        fontSize: '32px', fontFamily: 'Arial', color: '#ffffff',
+      }).setOrigin(0.5).setDepth(depth + 1).setScrollFactor(0).setAlpha(0.3);
+
+      rightZone.on('pointerdown', () => { self.btnRight = true; rightZone.setAlpha(activeA); rightArrow.setAlpha(0.6); });
+      rightZone.on('pointerup',   () => { self.btnRight = false; rightZone.setAlpha(alpha); rightArrow.setAlpha(0.3); });
+      rightZone.on('pointerout',  () => { self.btnRight = false; rightZone.setAlpha(alpha); rightArrow.setAlpha(0.3); });
+
+      // ── Center zone (tap to jump) — fills the gap between left and right zones ──
+      var centerX = W / 2;
+      var centerW = W - zoneW * 2;
+      var jumpZone = this.add.rectangle(centerX, H / 2, centerW, H, 0x000000, 0)
+        .setDepth(depth).setScrollFactor(0).setInteractive();
+
+      jumpZone.on('pointerdown', () => {
+        if (self.gameOver) { self.scene.restart(); return; }
+        self.doJump();
+      });
+    }
+
     // ── Main update ──────────────────────────────────────────────────────────────
     update(time: number, delta: number) {
       if (this.gameOver) return;
@@ -204,8 +256,10 @@ function startPlatformerGame(config: GameConfig) {
 
       // ── Horizontal movement ─────────────────────────────────────────────────
       var goLeft  = this.cursors.left?.isDown  || this.wasd.A?.isDown
+                    || this.btnLeft
                     || (this.pointerDown && this.pointerX < W * 0.42);
       var goRight = this.cursors.right?.isDown || this.wasd.D?.isDown
+                    || this.btnRight
                     || (this.pointerDown && this.pointerX > W * 0.58);
 
       var hx = this.hero.x;
