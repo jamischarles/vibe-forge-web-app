@@ -45,6 +45,22 @@
   <script src="scenes/platformer.js"></script>
 
   <script>
+    // ── Global error handler — catches uncaught errors in Phaser scenes ──────
+    window.addEventListener('error', function(event) {
+      console.error('[Game] Uncaught error:', event.error || event.message);
+      window.parent.postMessage({
+        type: 'GAME_ERROR',
+        message: (event.error && event.error.message) || event.message || 'Unknown game error'
+      }, '*');
+    });
+    window.addEventListener('unhandledrejection', function(event) {
+      console.error('[Game] Unhandled rejection:', event.reason);
+      window.parent.postMessage({
+        type: 'GAME_ERROR',
+        message: (event.reason && event.reason.message) || String(event.reason) || 'Unhandled promise rejection'
+      }, '*');
+    });
+
     // ── Listen for config or generated code from parent page ─────────────────
     window.addEventListener('message', (event) => {
       if (!event.data) return;

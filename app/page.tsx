@@ -5,6 +5,7 @@ import { Mic, MicOff, Gamepad2, Sparkles, RefreshCw, MessageSquare, Settings, Co
 import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED_MAX, VoteRecord, DownvoteCategory, DOWNVOTE_LABELS } from '@/lib/types'
 import type { DesignPlan, DesignBrief } from '@/lib/game-design-engine'
 import { HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS, CharacterAsset, BackgroundAsset } from '@/lib/assets'
+import { summarizeNewConfig, diffConfigs } from '@/lib/config-summary'
 
 type AppState = 'idle' | 'listening' | 'thinking' | 'planning' | 'playing'
 type ActiveTab = 'chat' | 'settings'
@@ -15,6 +16,8 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   vote?: 'up' | 'down' | null
+  changesSummary?: string[]
+  summaryLabel?: string
 }
 
 // ── Settings sub-components ────────────────────────────────────────────────
@@ -912,8 +915,16 @@ export default function Home() {
         setGameReady(true)
         setGameError(null)
       } else if (event.data.type === 'GAME_ERROR') {
-        setGameError(event.data.message || 'Game failed to start')
+        const errMsg = event.data.message || 'Game failed to start'
+        setGameError(errMsg)
         setGameReady(false)
+        // Surface error in chat so the user sees it
+        setMessages(prev => {
+          // Avoid duplicate error messages
+          const last = prev[prev.length - 1]
+          if (last?.role === 'assistant' && last.content.startsWith('⚠️ Game error:')) return prev
+          return [...prev, { role: 'assistant', content: `⚠️ Game error: ${errMsg}\n\nTry describing the game again or ask for a different type!` }]
+        })
       }
     }
     window.addEventListener('message', handleMessage)
@@ -937,7 +948,27 @@ export default function Home() {
         const a = BG_ASSETS.find(b => b.id === config.bgId)
         if (a) enriched.bgUrl = a.url
       }
+      setGameReady(false)
+      setGameError(null)
       iframe.contentWindow.postMessage({ type: 'LOAD_CONFIG', config: enriched }, '*')
+
+      // Safety timeout — if GAME_READY never fires within 8s, flag an error
+      const timeoutId = setTimeout(() => {
+        setGameReady(prev => {
+          if (!prev) {
+            setGameError('Game took too long to start — try again or describe a different game')
+          }
+          return prev
+        })
+      }, 8000)
+      // Clear timeout if GAME_READY/GAME_ERROR arrives (via the useEffect listener)
+      const cleanup = (event: MessageEvent) => {
+        if (event.data?.type === 'GAME_READY' || event.data?.type === 'GAME_ERROR') {
+          clearTimeout(timeoutId)
+          window.removeEventListener('message', cleanup)
+        }
+      }
+      window.addEventListener('message', cleanup)
     }
   }, [])
 
@@ -1041,6 +1072,8 @@ export default function Home() {
         content: gameMode === 'code'
           ? `Rebuilt "${data.title}" with your changes! 🕹️ SPACE or tap to play.`
           : `I coded "${data.title}" for you! 🕹️ Press SPACE or tap to play. Tell me what to change!`,
+        changesSummary: data.changesSummary,
+        summaryLabel: gameMode === 'code' ? 'Changes made' : 'What was built',
       }
       setMessages(prev => [...prev, assistantMessage])
       setGameMode('code')
@@ -1078,9 +1111,15 @@ export default function Home() {
         baseMsg += '\n\n🧠 Balance adjustments:\n' + plan.rules.map(r => `• ${r.reason}`).join('\n')
       }
 
+      const changesSummary = isUpdate && currentConfig
+        ? diffConfigs(currentConfig, config)
+        : summarizeNewConfig(config)
+
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: baseMsg,
+        changesSummary: changesSummary.length > 0 ? changesSummary : undefined,
+        summaryLabel: isUpdate ? 'Changes made' : 'What was built',
       }
       setMessages(prev => [...prev, assistantMessage])
       setCurrentConfig(config)
@@ -1455,6 +1494,18 @@ export default function Home() {
                     : 'bg-gray-700 text-gray-100 rounded-bl-md'
                 }`} style={{ whiteSpace: 'pre-wrap' }}>
                   {msg.content}
+                  {msg.changesSummary && msg.changesSummary.length > 0 && (
+                    <details className="mt-2 text-xs" style={{ whiteSpace: 'normal' }}>
+                      <summary className="cursor-pointer text-gray-400 hover:text-gray-200 select-none">
+                        📋 {msg.summaryLabel || 'Game details'}
+                      </summary>
+                      <ul className="mt-1 ml-4 list-disc space-y-0.5 text-gray-300">
+                        {msg.changesSummary.map((item, j) => (
+                          <li key={j}>{item}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
                 {msg.role === 'assistant' && (
                   <VoteButtons
