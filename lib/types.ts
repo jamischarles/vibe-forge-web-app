@@ -56,6 +56,13 @@ export interface ShooterConfig {
   enemyGrenades?:   boolean  // enemies throw grenades (uses same grenadeType)
   // ── Enemy variety ──────────────────────────────────────────────────────────
   enemyTypes?:      ('grunt' | 'heavy' | 'scout' | 'sniper')[]  // default ['grunt']
+  // ── Mini-game mode ────────────────────────────────────────────────────────
+  gameMode?:        'deathmatch' | 'ctf'  // default 'deathmatch' (classic kill-score)
+  modeConfig?: {
+    captureLimit?:    number   // CTF: captures to win, default 3
+    timeLimit?:       number   // match time in seconds, 0 = unlimited, default 180
+    defenderRatio?:   number   // fraction of enemies on defense, 0–1, default 0.5
+  }
 }
 
 export interface GameDifficulty {
