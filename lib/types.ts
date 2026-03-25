@@ -68,7 +68,21 @@ export interface GameDifficulty {
 }
 
 export interface PlatformerConfig {
-  doubleJump?: boolean   // enable double-jump (default false)
+  doubleJump?: boolean        // enable double-jump (default false)
+  tieredLayout?: boolean      // DK-style full-width sloped tiers instead of random platforms
+  ladders?: boolean           // climbable ladders between tiers (requires tieredLayout)
+  barrels?: boolean           // rolling obstacles that follow platform slopes
+  barrelInterval?: number     // ms between barrel spawns, default 2500
+  barrelSpeed?: number        // px/s, default 130
+  barrelEmoji?: string        // default '🛢️'
+  villain?: boolean           // show villain spawner at top (visual, spawns barrels)
+  villainEmoji?: string       // default '🦍'
+  goal?: boolean              // reach-to-win target at top of level
+  goalEmoji?: string          // default '👸'
+  hammer?: boolean            // timed power-up to smash barrels
+  hammerEmoji?: string        // default '🔨'
+  hammerDuration?: number     // ms, default 8000
+  clampEdges?: boolean        // disable screen-wrap, clamp hero to screen bounds
 }
 
 export interface GameConfig {

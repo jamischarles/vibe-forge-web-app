@@ -21,12 +21,6 @@
   padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* Hide bottom nav in landscape on touch devices to maximize game area */
-@media (orientation: landscape) and (hover: none) and (max-width: 1024px) {
-  .hide-landscape { display: none !important; }
-  .pb-landscape-0 { padding-bottom: 0 !important; }
-}
-
 @tailwind utilities;
 
 /* ── Global base styles ──────────────────────────────────────────────────── */
