@@ -6,7 +6,7 @@ import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED
 import type { DesignPlan, DesignBrief } from '@/lib/game-design-engine'
 import { HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS, CharacterAsset, BackgroundAsset } from '@/lib/assets'
 
-type AppState = 'idle' | 'listening' | 'thinking' | 'playing'
+type AppState = 'idle' | 'listening' | 'thinking' | 'planning' | 'playing'
 type ActiveTab = 'chat' | 'settings'
 type InputMode = 'simple' | 'clone'
 type GameMode = 'config' | 'code' | null
@@ -677,6 +677,175 @@ function OutputTargetSection({ mobileTarget, onMobileToggle }: {
   )
 }
 
+// ── Plan Editor ─────────────────────────────────────────────────────────────
+
+const STYLE_OPTIONS = ['tactical', 'arcade', 'chaotic', 'stealth', 'competitive', 'casual']
+const DIFFICULTY_OPTIONS = ['easy ramp', 'moderate throughout', 'hard from start', 'gradual escalation']
+
+function PlanEditor({ brief, onBuild, onCancel }: {
+  brief: DesignBrief
+  onBuild: (editedBrief: DesignBrief) => void
+  onCancel: () => void
+}) {
+  const [style, setStyle] = useState(brief.style || 'arcade')
+  const [mapIntent, setMapIntent] = useState(brief.mapIntent || '')
+  const [features, setFeatures] = useState<string[]>(brief.features || [])
+  const [featureReasoning, setFeatureReasoning] = useState<string[]>(brief.featureReasoning || [])
+  const [difficultyArc, setDifficultyArc] = useState(brief.difficultyArc || 'moderate throughout')
+  const [newFeature, setNewFeature] = useState('')
+
+  const toggleFeature = (idx: number) => {
+    setFeatures(prev => prev.filter((_, i) => i !== idx))
+    setFeatureReasoning(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const addFeature = () => {
+    const trimmed = newFeature.trim()
+    if (!trimmed) return
+    setFeatures(prev => [...prev, trimmed])
+    setFeatureReasoning(prev => [...prev, ''])
+    setNewFeature('')
+  }
+
+  const handleBuild = () => {
+    onBuild({
+      style,
+      mapIntent,
+      features,
+      featureReasoning,
+      difficultyArc,
+      keyChoices: brief.keyChoices || [],
+    })
+  }
+
+  return (
+    <div className="space-y-4 p-4 bg-gray-800 rounded-xl border border-gray-600 text-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-white flex items-center gap-2">
+          🎨 Game Design Plan
+        </h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-white text-xs px-2 py-1 rounded bg-gray-700">
+          Skip
+        </button>
+      </div>
+
+      {/* Style */}
+      <div>
+        <label className="block text-gray-400 text-xs mb-1.5 font-medium">Style</label>
+        <div className="flex flex-wrap gap-1.5">
+          {STYLE_OPTIONS.map(s => (
+            <button
+              key={s}
+              onClick={() => setStyle(s)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                style === s
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Map Intent */}
+      <div>
+        <label className="block text-gray-400 text-xs mb-1.5 font-medium">Map Design</label>
+        <input
+          type="text"
+          value={mapIntent}
+          onChange={(e) => setMapIntent(e.target.value)}
+          placeholder="e.g. dense corridors with flanking routes"
+          className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-xs border border-gray-600 focus:border-purple-500 focus:outline-none"
+        />
+      </div>
+
+      {/* Features */}
+      <div>
+        <label className="block text-gray-400 text-xs mb-1.5 font-medium">Features</label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {features.map((f, i) => (
+            <div key={i} className="group flex items-center gap-1 bg-green-900/40 border border-green-700/50 rounded-full px-3 py-1">
+              <span className="text-green-300 text-xs">{f}</span>
+              <button
+                onClick={() => toggleFeature(i)}
+                className="text-green-600 hover:text-red-400 text-xs ml-1 font-bold"
+                title="Remove feature"
+              >
+                ×
+              </button>
+              {featureReasoning[i] && (
+                <span className="text-green-700 text-[10px] ml-1 hidden group-hover:inline">
+                  — {featureReasoning[i]}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newFeature}
+            onChange={(e) => setNewFeature(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFeature() } }}
+            placeholder="Add a feature..."
+            className="flex-1 bg-gray-700 text-white rounded-lg px-3 py-1.5 text-xs border border-gray-600 focus:border-green-500 focus:outline-none"
+          />
+          <button
+            onClick={addFeature}
+            className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded-lg text-xs font-medium"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      {/* Difficulty */}
+      <div>
+        <label className="block text-gray-400 text-xs mb-1.5 font-medium">Difficulty Arc</label>
+        <div className="flex flex-wrap gap-1.5">
+          {DIFFICULTY_OPTIONS.map(d => (
+            <button
+              key={d}
+              onClick={() => setDifficultyArc(d)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                difficultyArc === d
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Key Choices (read-only for now) */}
+      {brief.keyChoices && brief.keyChoices.length > 0 && (
+        <div>
+          <label className="block text-gray-400 text-xs mb-1.5 font-medium">Key Choices</label>
+          <div className="space-y-1">
+            {brief.keyChoices.map((choice, i) => (
+              <div key={i} className="text-xs text-gray-400 bg-gray-750 rounded px-2 py-1 bg-gray-700/50">
+                {choice}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Build button */}
+      <button
+        onClick={handleBuild}
+        className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-xl text-sm transition-all shadow-lg"
+      >
+        Build It! 🚀
+      </button>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -696,6 +865,10 @@ export default function Home() {
   const [gameMode, setGameMode] = useState<GameMode>(null)
   const [codeGameTitle, setCodeGameTitle] = useState('')
   const [codeAccumPrompt, setCodeAccumPrompt] = useState('')
+
+  // Design plan editing
+  const [pendingBrief, setPendingBrief] = useState<DesignBrief | null>(null)
+  const [pendingPrompt, setPendingPrompt] = useState('')
 
   // M4: output target settings
   const [mobileTarget, setMobileTarget] = useState(false)
@@ -829,6 +1002,96 @@ export default function Home() {
     requestAnimationFrame(() => textareaRef.current?.focus())
   }, [])
 
+  // ── Core generation: takes an optional pre-built brief ────────────────
+  const runGenerate = useCallback(async (
+    promptText: string,
+    briefOverride?: DesignBrief | null
+  ) => {
+    const isCodeMode = inputMode === 'clone' || gameMode === 'code'
+    const newAccumPrompt = gameMode === 'code'
+      ? `${codeAccumPrompt}\n\nChange: ${promptText}`
+      : promptText
+
+    setGameReady(false)
+    setGameError(null)
+
+    const promptWithHint = (!isCodeMode && gameMode !== 'config' && gameMode !== 'code')
+      ? `${promptText} [preferred template: ${preferredTemplate}]`
+      : promptText
+
+    const response = await fetch('/api/generate-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: promptWithHint,
+        currentConfig: gameMode === 'config' ? currentConfig : undefined,
+        isCodeMode,
+        codeAccumPrompt: gameMode === 'code' ? newAccumPrompt : undefined,
+        mobile: mobileTarget,
+        designBrief: briefOverride !== undefined ? briefOverride : undefined,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Something went wrong')
+
+    if (data.type === 'code') {
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: gameMode === 'code'
+          ? `Rebuilt "${data.title}" with your changes! 🕹️ SPACE or tap to play.`
+          : `I coded "${data.title}" for you! 🕹️ Press SPACE or tap to play. Tell me what to change!`,
+      }
+      setMessages(prev => [...prev, assistantMessage])
+      setGameMode('code')
+      setCodeGameTitle(data.title)
+      setCodeAccumPrompt(newAccumPrompt)
+      sendCodeToGame(data.code)
+      setState('playing')
+
+    } else {
+      const config: GameConfig = data.config
+      const plan: DesignPlan | undefined = data.designPlan
+      const brief: DesignBrief | undefined = data.designBrief
+      const isUpdate = gameMode !== null
+      const isTopDown = config.template === 'topdown'
+
+      let baseMsg = isUpdate
+        ? `Updated! ${config.heroEmoji} vs ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
+        : config.template === 'shooter'
+          ? `I made "${config.title}"! ${config.heroEmoji} vs ${config.enemyEmoji} — WASD to move, click/SPACE to shoot! 🔫`
+          : isTopDown
+            ? `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji} — use WASD or tap to move! ⬆️`
+            : `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump! 🎮`
+
+      if (brief && brief.style && !isUpdate) {
+        baseMsg += `\n\n🎨 Design vision: ${brief.style}`
+        if (brief.mapIntent) baseMsg += ` — ${brief.mapIntent}`
+        if (brief.features?.length) baseMsg += `\nFeatures: ${brief.features.join(', ')}`
+        if (brief.featureReasoning?.length) {
+          baseMsg += '\n' + brief.featureReasoning.map(r => `  → ${r}`).join('\n')
+        }
+        if (brief.difficultyArc) baseMsg += `\nDifficulty: ${brief.difficultyArc}`
+      }
+
+      if (plan && plan.rules.length > 0) {
+        baseMsg += '\n\n🧠 Balance adjustments:\n' + plan.rules.map(r => `• ${r.reason}`).join('\n')
+      }
+
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: baseMsg,
+      }
+      setMessages(prev => [...prev, assistantMessage])
+      setCurrentConfig(config)
+      setPreferredTemplate(config.template)
+      setGameMode('config')
+      sendConfigToGame(config)
+      setState('playing')
+    }
+  }, [sendConfigToGame, sendCodeToGame, currentConfig, gameMode, inputMode, codeAccumPrompt, mobileTarget, preferredTemplate])
+
+  // ── Main entry: new games go through plan editor, updates go direct ──
   const handleGenerate = useCallback(async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed) return
@@ -841,104 +1104,74 @@ export default function Home() {
     const userMessage: ChatMessage = { role: 'user', content: trimmed }
     setMessages(prev => [...prev, userMessage])
 
-    // Code mode if: toggle is on clone, OR we're already iterating a code game
     const isCodeMode = inputMode === 'clone' || gameMode === 'code'
-
-    // For code game iteration, accumulate the description
-    const newAccumPrompt = gameMode === 'code'
-      ? `${codeAccumPrompt}\n\nChange: ${trimmed}`
-      : trimmed
+    const isUpdate = gameMode === 'config' || gameMode === 'code'
 
     try {
-      // Reset game ready signal for the new generation
-      setGameReady(false)
-      setGameError(null)
+      // Updates and code games skip the plan editor — go straight to generation
+      if (isUpdate || isCodeMode) {
+        await runGenerate(trimmed)
+        return
+      }
 
-      // For brand-new config games, hint the AI toward the preferred template
-      const promptWithHint = (!isCodeMode && gameMode !== 'config' && gameMode !== 'code')
-        ? `${trimmed} [preferred template: ${preferredTemplate}]`
-        : trimmed
-
-      const response = await fetch('/api/generate-game', {
+      // New config games: fetch design brief first, then show plan editor
+      const briefResponse = await fetch('/api/design-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptWithHint,
-          currentConfig: gameMode === 'config' ? currentConfig : undefined,
-          isCodeMode,
-          codeAccumPrompt: gameMode === 'code' ? newAccumPrompt : undefined,
-          mobile: mobileTarget,
-        }),
+        body: JSON.stringify({ prompt: trimmed }),
       })
 
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Something went wrong')
-
-      if (data.type === 'code') {
-        const assistantMessage: ChatMessage = {
-          role: 'assistant',
-          content: gameMode === 'code'
-            ? `Rebuilt "${data.title}" with your changes! 🕹️ SPACE or tap to play.`
-            : `I coded "${data.title}" for you! 🕹️ Press SPACE or tap to play. Tell me what to change!`,
+      if (briefResponse.ok) {
+        const briefData = await briefResponse.json()
+        if (briefData.brief) {
+          // Show plan editor
+          setPendingBrief(briefData.brief)
+          setPendingPrompt(trimmed)
+          setState('planning')
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: '🎨 Here\'s my design plan — edit it or hit "Build It!" to create your game!',
+          }])
+          return
         }
-        setMessages(prev => [...prev, assistantMessage])
-        setGameMode('code')
-        setCodeGameTitle(data.title)
-        setCodeAccumPrompt(newAccumPrompt)
-        sendCodeToGame(data.code)
-        setState('playing')
-
-      } else {
-        // Config game (runner or topdown)
-        const config: GameConfig = data.config
-        const plan: DesignPlan | undefined = data.designPlan
-        const brief: DesignBrief | undefined = data.designBrief
-        const isUpdate = gameMode !== null
-        const isTopDown = config.template === 'topdown'
-
-        // Build game creation message
-        let baseMsg = isUpdate
-          ? `Updated! ${config.heroEmoji} vs ${config.enemyEmoji} at speed ${config.speed}. Keep going! 🎮`
-          : config.template === 'shooter'
-            ? `I made "${config.title}"! ${config.heroEmoji} vs ${config.enemyEmoji} — WASD to move, click/SPACE to shoot! 🔫`
-            : isTopDown
-              ? `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji} — use WASD or tap to move! ⬆️`
-              : `I made "${config.title}"! ${config.heroEmoji} dodges ${config.enemyEmoji}. Press SPACE or tap to jump! 🎮`
-
-        // Append design brief (LLM reasoning) if present
-        if (brief && brief.style && !isUpdate) {
-          baseMsg += `\n\n🎨 Design vision: ${brief.style}`
-          if (brief.mapIntent) baseMsg += ` — ${brief.mapIntent}`
-          if (brief.features?.length) baseMsg += `\nFeatures: ${brief.features.join(', ')}`
-          if (brief.featureReasoning?.length) {
-            baseMsg += '\n' + brief.featureReasoning.map(r => `  → ${r}`).join('\n')
-          }
-          if (brief.difficultyArc) baseMsg += `\nDifficulty: ${brief.difficultyArc}`
-        }
-
-        // Append design engine adjustments if any rules fired
-        if (plan && plan.rules.length > 0) {
-          baseMsg += '\n\n🧠 Balance adjustments:\n' + plan.rules.map(r => `• ${r.reason}`).join('\n')
-        }
-
-        const assistantMessage: ChatMessage = {
-          role: 'assistant',
-          content: baseMsg,
-        }
-        setMessages(prev => [...prev, assistantMessage])
-        setCurrentConfig(config)
-        setPreferredTemplate(config.template)
-        setGameMode('config')
-        sendConfigToGame(config)
-        setState('playing')
       }
+
+      // Brief generation failed — fall back to direct generation
+      await runGenerate(trimmed)
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to make the game'
       setError(msg)
       setState(isPlaying ? 'playing' : 'idle')
     }
-  }, [sendConfigToGame, sendCodeToGame, currentConfig, gameMode, inputMode, codeAccumPrompt, isPlaying, mobileTarget, preferredTemplate])
+  }, [runGenerate, inputMode, gameMode, isPlaying])
+
+  // ── Build from edited plan ───────────────────────────────────────────
+  const handleBuildFromPlan = useCallback(async (editedBrief: DesignBrief) => {
+    setState('thinking')
+    setPendingBrief(null)
+    try {
+      await runGenerate(pendingPrompt, editedBrief)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to make the game'
+      setError(msg)
+      setState(isPlaying ? 'playing' : 'idle')
+    }
+  }, [runGenerate, pendingPrompt, isPlaying])
+
+  // ── Skip plan → generate with brief as-is ────────────────────────────
+  const handleSkipPlan = useCallback(async () => {
+    setState('thinking')
+    const brief = pendingBrief
+    setPendingBrief(null)
+    try {
+      await runGenerate(pendingPrompt, brief)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to make the game'
+      setError(msg)
+      setState(isPlaying ? 'playing' : 'idle')
+    }
+  }, [runGenerate, pendingBrief, pendingPrompt, isPlaying])
 
   const handleSubmit = () => {
     if (prompt.trim() && state !== 'thinking') handleGenerate(prompt)
@@ -985,7 +1218,7 @@ export default function Home() {
 
   // Hint chips depend on current game mode + input mode
   const hintChips: string[] = (() => {
-    if (state === 'thinking') return []
+    if (state === 'thinking' || state === 'planning') return []
     if (inputMode === 'clone' && !isPlaying) {
       return ['Lunar Lander', 'Flappy Bird', 'Breakout', 'Snake', 'Asteroids']
     }
@@ -1063,8 +1296,8 @@ export default function Home() {
 
   // Submit button appearance
   const submitLabel = (() => {
-    if (state === 'thinking') {
-      return <><Sparkles size={15} className="animate-spin" />{gameMode === 'code' ? 'Coding...' : isPlaying ? 'Updating...' : 'Making...'}</>
+    if (state === 'thinking' || state === 'planning') {
+      return <><Sparkles size={15} className="animate-spin" />{state === 'planning' ? 'Planning...' : gameMode === 'code' ? 'Coding...' : isPlaying ? 'Updating...' : 'Making...'}</>
     }
     if (inputMode === 'clone') {
       return gameMode === 'code'
@@ -1076,7 +1309,7 @@ export default function Home() {
   })()
 
   const submitColor = (() => {
-    if (state === 'thinking') return 'bg-purple-800 text-purple-300 cursor-not-allowed'
+    if (state === 'thinking' || state === 'planning') return 'bg-purple-800 text-purple-300 cursor-not-allowed'
     if (!prompt.trim()) return 'bg-gray-700 text-gray-500 cursor-not-allowed'
     if (inputMode === 'clone') return 'bg-orange-500 hover:bg-orange-400 text-white shadow-lg shadow-orange-900/50'
     if (gameMode === 'config') return 'bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-900/50'
@@ -1244,6 +1477,18 @@ export default function Home() {
               </div>
             ))}
 
+            {state === 'planning' && pendingBrief && (
+              <div className="flex justify-start">
+                <div className="max-w-[95%] w-full">
+                  <PlanEditor
+                    brief={pendingBrief}
+                    onBuild={handleBuildFromPlan}
+                    onCancel={handleSkipPlan}
+                  />
+                </div>
+              </div>
+            )}
+
             {state === 'thinking' && (
               <div className="flex justify-start">
                 <div className="bg-gray-700 text-gray-100 rounded-2xl rounded-bl-md px-4 py-3 text-sm">
@@ -1281,7 +1526,7 @@ export default function Home() {
           )}
 
           {/* Mode toggle — hidden while thinking/listening */}
-          {state !== 'thinking' && state !== 'listening' && (
+          {state !== 'thinking' && state !== 'listening' && state !== 'planning' && (
             <div className="flex bg-gray-700 rounded-xl p-0.5 gap-0.5">
               <button
                 onClick={() => setInputMode('simple')}
@@ -1342,7 +1587,7 @@ export default function Home() {
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={textareaPlaceholder}
-            disabled={state === 'thinking' || state === 'listening'}
+            disabled={state === 'thinking' || state === 'listening' || state === 'planning'}
             className={`w-full bg-gray-700 text-white placeholder-gray-500 rounded-xl px-3 py-2 text-sm resize-none border focus:outline-none transition-colors min-h-[56px] ${
               inputMode === 'clone'
                 ? 'border-orange-700/50 focus:border-orange-500'
@@ -1355,7 +1600,7 @@ export default function Home() {
             {voiceSupported && (
               <button
                 onClick={state === 'listening' ? stopListening : startListening}
-                disabled={state === 'thinking'}
+                disabled={state === 'thinking' || state === 'planning'}
                 className={`flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
                   state === 'listening'
                     ? 'bg-red-500 hover:bg-red-600 animate-pulse'

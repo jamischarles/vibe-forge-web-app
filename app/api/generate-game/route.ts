@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     // isCodeMode: explicit flag set by the "Build a Clone" UI toggle
     // codeAccumPrompt: accumulated description for iterating on code games
-    const { prompt, currentConfig, isCodeMode, codeAccumPrompt, mobile } = body
+    const { prompt, currentConfig, isCodeMode, codeAccumPrompt, mobile, designBrief } = body
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
     const result = await generateGameConfig(
       trimmed,
       currentConfig as GameConfig | undefined,
-      mobile === true
+      mobile === true,
+      designBrief !== undefined ? designBrief : undefined
     )
     return NextResponse.json({
       type: 'config',

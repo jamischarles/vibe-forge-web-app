@@ -347,7 +347,7 @@ Respond with ONLY valid JSON:
   "keyChoices": ["wallCount:8 — dense cover for tactical flag runs", "heroHp:3 — survivability for objective play", "fogRadius:160 — tight enough for tension, wide enough for navigation"]
 }`
 
-async function generateDesignBrief(userPrompt: string): Promise<DesignBrief | null> {
+export async function generateDesignBrief(userPrompt: string): Promise<DesignBrief | null> {
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -397,13 +397,16 @@ export interface GenerateResult {
 export async function generateGameConfig(
   userPrompt: string,
   currentConfig?: GameConfig,
-  mobile = false
+  mobile = false,
+  preBuiltBrief?: DesignBrief | null
 ): Promise<GenerateResult> {
   const isUpdate = !!currentConfig
 
   try {
-    // Pass 1: Generate design brief (new games only — updates skip this)
-    const designBrief = isUpdate ? null : await generateDesignBrief(userPrompt)
+    // Pass 1: Generate design brief (skip if pre-built brief provided or updating)
+    const designBrief = preBuiltBrief !== undefined
+      ? preBuiltBrief
+      : (isUpdate ? null : await generateDesignBrief(userPrompt))
 
     const systemPrompt = (isUpdate ? UPDATE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT) + buildMobileConstraint(mobile)
 
