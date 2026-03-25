@@ -104,8 +104,15 @@ Vocabulary: detect these styles from the user's words and apply automatically:
 - "shooter" + "lots of enemies" → template: "shooter", shooter: { maxEnemies: 6 }
 
 Shooter template rules (only when template === "shooter"):
-- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed, grenadeType, grenadeCount, grenadeCooldown, fogOfWar, fogRadius, healthPickups, grenadePickups, weaponPickups, enemyGrenades, enemyTypes, gameMode, modeConfig }
-- Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450
+- Include an optional "shooter" sub-object with these optional params: { wallCount, heroHp, enemyHp, fireRate, enemyFireRate, maxEnemies, projectileSpeed, grenadeType, grenadeCount, grenadeCooldown, fogOfWar, fogRadius, healthPickups, grenadePickups, weaponPickups, enemyGrenades, enemyTypes, gameMode, modeConfig, arenaScale, wallThickness, entityScale, floorTile, wallStyle }
+- Default shooter config (omit field for default): wallCount=6, heroHp=3, enemyHp=2, fireRate=500, enemyFireRate=2000, maxEnemies=4, projectileSpeed=450, arenaScale=1.0, wallThickness=20, entityScale=1.0, floorTile=56
+- Visual/sizing params — IMPORTANT: vary these based on the map intent and style to make each game look distinct:
+  - arenaScale: camera zoom 0.6 (zoomed out, big open arena) to 1.4 (tight, claustrophobic). "open arena" → 0.7, "tight corridors" → 1.2, "normal" → 1.0
+  - wallThickness: 10–40 px. "thin cover" → 12, "chunky walls" → 30, "normal" → 20
+  - entityScale: hero/enemy size multiplier 0.7–1.5. "small fast characters" → 0.8, "big brawler" → 1.3, "normal" → 1.0
+  - floorTile: checkerboard tile size 24–96 px. Smaller = detailed/busy, larger = clean/minimal. "detailed floor" → 32, "clean floor" → 80, default 56
+  - wallStyle: layout algorithm — "box" (default, rectangular clusters), "corridor" (long parallel walls creating lanes), "scattered" (many small random obstacles), "maze" (interconnected wall segments forming paths)
+  - ALWAYS set these intentionally based on the game's theme and feel — never just use all defaults
 - Grenade types (E key to throw, arcs over walls, timer-based detonation):
   - grenadeType:"frag" → explosion blast radius, damages enemies (default grenadeCount:3)
   - grenadeType:"smoke" → smoke cloud blocks enemy LOS for 8s (default grenadeCount:3)
@@ -276,6 +283,16 @@ Shooter template update rules (only when template === "shooter"):
 - "more time" / "longer match" → increase shooter.modeConfig.timeLimit by 60
 - "less time" / "shorter match" → decrease shooter.modeConfig.timeLimit by 60 (min 30)
 - "no time limit" → set shooter.modeConfig.timeLimit: 0
+- "zoom in" / "closer" / "tighter" / "claustrophobic" → increase shooter.arenaScale by 0.15 (max 1.4)
+- "zoom out" / "wider view" / "bigger arena" → decrease shooter.arenaScale by 0.15 (min 0.6)
+- "thicker walls" / "chunky walls" / "big walls" → increase shooter.wallThickness by 8 (max 40)
+- "thinner walls" / "thin cover" → decrease shooter.wallThickness by 6 (min 10)
+- "bigger characters" / "bigger entities" → increase shooter.entityScale by 0.15 (max 1.5)
+- "smaller characters" / "smaller entities" → decrease shooter.entityScale by 0.15 (min 0.7)
+- "maze layout" / "maze walls" → set shooter.wallStyle: "maze"
+- "corridor layout" / "lanes" → set shooter.wallStyle: "corridor"
+- "scattered cover" / "random cover" → set shooter.wallStyle: "scattered"
+- "normal walls" / "box walls" → set shooter.wallStyle: "box"
 - Always preserve shooter fields not mentioned by the kid
 - groundColor: always keep as "#5a8a5a"
 - jumpForce: always keep as 580
@@ -457,6 +474,12 @@ export async function generateGameConfig(
       if (s.enemyFireRate   != null) s.enemyFireRate    = Math.max(800, Math.min(4000, s.enemyFireRate))
       if (s.maxEnemies      != null) s.maxEnemies       = Math.max(2,   Math.min(8,    s.maxEnemies))
       if (s.projectileSpeed != null) s.projectileSpeed  = Math.max(200, Math.min(700,  s.projectileSpeed))
+      // Validate visual/sizing params
+      if (s.arenaScale     != null) s.arenaScale     = Math.max(0.6, Math.min(1.4, s.arenaScale))
+      if (s.wallThickness  != null) s.wallThickness  = Math.max(10,  Math.min(40,  s.wallThickness))
+      if (s.entityScale    != null) s.entityScale    = Math.max(0.7, Math.min(1.5, s.entityScale))
+      if (s.floorTile      != null) s.floorTile      = Math.max(24,  Math.min(96,  s.floorTile))
+      if (s.wallStyle && !['box','corridor','scattered','maze'].includes(s.wallStyle)) s.wallStyle = 'box'
       // Validate gameMode
       if (s.gameMode && s.gameMode !== 'deathmatch' && s.gameMode !== 'ctf') s.gameMode = 'deathmatch'
       // Validate modeConfig

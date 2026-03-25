@@ -56,6 +56,12 @@ export interface ShooterConfig {
   enemyGrenades?:   boolean  // enemies throw grenades (uses same grenadeType)
   // ── Enemy variety ──────────────────────────────────────────────────────────
   enemyTypes?:      ('grunt' | 'heavy' | 'scout' | 'sniper')[]  // default ['grunt']
+  // ── Visual / sizing ────────────────────────────────────────────────────────
+  arenaScale?:      number   // camera zoom: 0.6 (zoomed-out, big arena) to 1.4 (tight), default 1.0
+  wallThickness?:   number   // px, wall thickness: 10–40, default 20
+  entityScale?:     number   // hero/enemy size multiplier: 0.7–1.5, default 1.0
+  floorTile?:       number   // checkerboard tile size: 24–96, default 56
+  wallStyle?:       'box' | 'corridor' | 'scattered' | 'maze'  // wall layout algorithm, default 'box'
   // ── Mini-game mode ────────────────────────────────────────────────────────
   gameMode?:        'deathmatch' | 'ctf'  // default 'deathmatch' (classic kill-score)
   modeConfig?: {

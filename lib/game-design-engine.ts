@@ -637,6 +637,124 @@ const RULES: DesignRule[] = [
         'shooter.heroHp', before, 4)
     },
   },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  VISUAL / SIZING RULES — make games look distinct
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── SHOOTER: Fog of war → tighter zoom for claustrophobic feel ───────
+  {
+    id: 'fog-tighter-zoom',
+    templates: ['shooter'],
+    category: 'feel',
+    priority: 25,
+    condition: (c) => c.shooter?.fogOfWar === true && (c.shooter?.arenaScale ?? 1.0) < 1.1,
+    apply: (c, fired) => {
+      const before = sc(c).arenaScale ?? 1.0
+      sc(c).arenaScale = 1.15
+      record(fired, 'fog-tighter-zoom', 'feel',
+        'Fog of war feels better zoomed in for claustrophobic tension — arenaScale set to 1.15',
+        'shooter.arenaScale', before, 1.15)
+    },
+  },
+
+  // ── SHOOTER: Many walls → maze wall style if not set ─────────────────
+  {
+    id: 'many-walls-maze-style',
+    templates: ['shooter'],
+    category: 'feel',
+    priority: 20,
+    condition: (c) => (c.shooter?.wallCount ?? 6) >= 12 && !c.shooter?.wallStyle,
+    apply: (c, fired) => {
+      sc(c).wallStyle = 'maze'
+      record(fired, 'many-walls-maze-style', 'feel',
+        'High wall count (12+) plays better as interconnected maze layout',
+        'shooter.wallStyle', undefined, 'maze')
+    },
+  },
+
+  // ── SHOOTER: Few walls → scattered for variety ───────────────────────
+  {
+    id: 'few-walls-scattered',
+    templates: ['shooter'],
+    category: 'feel',
+    priority: 20,
+    condition: (c) => (c.shooter?.wallCount ?? 6) <= 3 && !c.shooter?.wallStyle,
+    apply: (c, fired) => {
+      sc(c).wallStyle = 'scattered'
+      record(fired, 'few-walls-scattered', 'feel',
+        'Low wall count (3 or fewer) works better as scattered small cover pieces',
+        'shooter.wallStyle', undefined, 'scattered')
+    },
+  },
+
+  // ── SHOOTER: CTF → corridor style for lane-based flag runs ───────────
+  {
+    id: 'ctf-corridor-style',
+    templates: ['shooter'],
+    category: 'synergy',
+    priority: 22,
+    condition: (c) => c.shooter?.gameMode === 'ctf' && !c.shooter?.wallStyle,
+    apply: (c, fired) => {
+      sc(c).wallStyle = 'corridor'
+      record(fired, 'ctf-corridor-style', 'synergy',
+        'CTF benefits from corridor layout creating natural flag-running lanes',
+        'shooter.wallStyle', undefined, 'corridor')
+    },
+  },
+
+  // ── SHOOTER: Open arena (few walls) → zoom out for space ─────────────
+  {
+    id: 'open-arena-zoom-out',
+    templates: ['shooter'],
+    category: 'feel',
+    priority: 25,
+    condition: (c) => (c.shooter?.wallCount ?? 6) <= 3 && (c.shooter?.arenaScale ?? 1.0) > 0.85,
+    apply: (c, fired) => {
+      const before = sc(c).arenaScale ?? 1.0
+      sc(c).arenaScale = 0.8
+      record(fired, 'open-arena-zoom-out', 'feel',
+        'Open arenas with few walls feel better zoomed out for a wider battlefield view',
+        'shooter.arenaScale', before, 0.8)
+    },
+  },
+
+  // ── SHOOTER: Heavy enemies → thicker walls for chunky feel ───────────
+  {
+    id: 'heavy-chunky-walls',
+    templates: ['shooter'],
+    category: 'feel',
+    priority: 20,
+    condition: (c) => (c.shooter?.enemyTypes ?? []).includes('heavy') && (c.shooter?.wallThickness ?? 20) < 25,
+    apply: (c, fired) => {
+      const before = sc(c).wallThickness ?? 20
+      sc(c).wallThickness = 28
+      record(fired, 'heavy-chunky-walls', 'feel',
+        'Heavy enemies suggest a brawler feel — walls thickened to 28px for chunkier cover',
+        'shooter.wallThickness', before, 28)
+    },
+  },
+
+  // ── SHOOTER: Scouts (fast) → smaller entities, zoom out ──────────────
+  {
+    id: 'scouts-nimble-scale',
+    templates: ['shooter'],
+    category: 'feel',
+    priority: 20,
+    condition: (c) => {
+      const types = c.shooter?.enemyTypes ?? []
+      const scoutHeavy = types.includes('scout') && !types.includes('heavy')
+      return scoutHeavy && (c.shooter?.entityScale ?? 1.0) >= 1.0
+    },
+    apply: (c, fired) => {
+      const before = sc(c).entityScale ?? 1.0
+      sc(c).entityScale = 0.85
+      sc(c).arenaScale = Math.min(sc(c).arenaScale ?? 1.0, 0.9)
+      record(fired, 'scouts-nimble-scale', 'feel',
+        'Scout-focused games feel faster with smaller entities and wider view',
+        'shooter.entityScale', before, 0.85)
+    },
+  },
 ]
 
 // ══════════════════════════════════════════════════════════════════════════════
