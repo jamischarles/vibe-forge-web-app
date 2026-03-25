@@ -762,11 +762,42 @@ function startShooterGame(config: GameConfig) {
     buildZones() {
       var W = this.W, H = this.H;
       var cx = W/2, cy = H/2;
+
+      if (WALL_STYLE === 'corridor') {
+        // Corridor: spawn from left/right edges (lane ends)
+        return [
+          { x: 20,       y: 20,    w: 80,    h: H-40 },  // left strip
+          { x: W-100,    y: 20,    w: 80,    h: H-40 },  // right strip
+          { x: cx-60,    y: 20,    w: 120,   h: 80 },    // top center
+          { x: cx-60,    y: H-100, w: 120,   h: 80 },    // bottom center
+        ];
+      }
+      if (WALL_STYLE === 'maze') {
+        // Maze: more zones spread across grid for varied spawns
+        var third = W/3, thirdH = H/3;
+        return [
+          { x: 20,        y: 20,        w: third-30,  h: thirdH-30 },  // TL
+          { x: third*2+10,y: 20,        w: third-30,  h: thirdH-30 },  // TR
+          { x: 20,        y: thirdH*2+10,w: third-30,  h: thirdH-30 }, // BL
+          { x: third*2+10,y: thirdH*2+10,w: third-30,  h: thirdH-30 }, // BR
+          { x: third+10,  y: thirdH+10, w: third-20,  h: thirdH-20 },  // center
+        ];
+      }
+      if (WALL_STYLE === 'scattered') {
+        // Scattered: wider zones for more spread-out spawns
+        return [
+          { x: 20,    y: 20,    w: cx-30, h: cy-30 },
+          { x: cx+10, y: 20,    w: cx-30, h: cy-30 },
+          { x: 20,    y: cy+10, w: cx-30, h: cy-30 },
+          { x: cx+10, y: cy+10, w: cx-30, h: cy-30 },
+        ];
+      }
+      // Default (box): original 4-quadrant zones
       return [
-        { x: 20,    y: 20,    w: cx-40, h: cy-40 }, // top-left
-        { x: cx+20, y: 20,    w: cx-40, h: cy-40 }, // top-right
-        { x: 20,    y: cy+20, w: cx-40, h: cy-40 }, // bottom-left
-        { x: cx+20, y: cy+20, w: cx-40, h: cy-40 }, // bottom-right
+        { x: 20,    y: 20,    w: cx-40, h: cy-40 },
+        { x: cx+20, y: 20,    w: cx-40, h: cy-40 },
+        { x: 20,    y: cy+20, w: cx-40, h: cy-40 },
+        { x: cx+20, y: cy+20, w: cx-40, h: cy-40 },
       ];
     }
 
@@ -850,11 +881,15 @@ function startShooterGame(config: GameConfig) {
         this.score++;
         this.scoreTxt.setText((GAME_MODE === 'ctf' ? 'Kills: ' : 'Score: ') + this.score);
         this.sounds.score && this.sounds.score();
-        // Respawn in same zone after 3s
+        // Respawn in a random zone after variable delay (faster as game progresses)
         var self = this;
-        var zone = e.patrolZone;
-        this.time.delayedCall(3000, function() {
-          if (!self.isGameOver) self.spawnEnemy(zone);
+        var zones = this.zones;
+        var respawnZone = zones[Phaser.Math.Between(0, zones.length - 1)];
+        var baseRespawn = FOG_OF_WAR ? 4000 : 3000; // fog games: slower respawn for stealth pacing
+        var rampReduction = Math.min(1500, Math.floor(self.rampTimer / 60000) * 300);
+        var respawnMs = Math.max(1500, baseRespawn - rampReduction + Phaser.Math.Between(-500, 500));
+        this.time.delayedCall(respawnMs, function() {
+          if (!self.isGameOver) self.spawnEnemy(respawnZone);
         });
       } else {
         // Flash and seek cover
@@ -890,12 +925,18 @@ function startShooterGame(config: GameConfig) {
       var roleTarget = (this.modeState && e.aiRole) ? AIRoles.getTarget(e, this.modeState, hx, hy) : null;
       var targetX = roleTarget ? roleTarget.x : hx;
       var targetY = roleTarget ? roleTarget.y : hy;
-      var alertRange = roleTarget ? (roleTarget.alertRange || 280) : 280;
+      var baseAlertRange = roleTarget ? (roleTarget.alertRange || 280) : 280;
+      // Fog of war reduces enemy detection range — enemies can't see as far in darkness
+      var alertRange = (FOG_OF_WAR) ? Math.min(baseAlertRange, FOG_RADIUS * 0.75) : baseAlertRange;
 
       var dx = targetX - e.x, dy = targetY - e.y;
       var dist = Math.sqrt(dx*dx + dy*dy);
       // LOS always checked against hero (for shooting) and target (for movement)
       var losHero   = this.hasLOS(e.x, e.y, hx, hy);
+      // In fog, even with LOS, hero must be within fog-based alert range to be "seen"
+      var heroDx2 = hx - e.x, heroDy2 = hy - e.y;
+      var heroDist2 = Math.sqrt(heroDx2*heroDx2 + heroDy2*heroDy2);
+      if (FOG_OF_WAR && heroDist2 > alertRange) losHero = false;
       var losTarget = roleTarget ? this.hasLOS(e.x, e.y, targetX, targetY) : losHero;
       var los = losHero;
 
@@ -933,7 +974,7 @@ function startShooterGame(config: GameConfig) {
           var pRes = this.resolveWallCollision(pnx, pny, er);
           e.x = pRes.x; e.y = pRes.y;
         } else {
-          var spd = e.patrolSpeed;
+          var spd = FOG_OF_WAR ? e.patrolSpeed * 0.7 : e.patrolSpeed; // slower patrol in fog
           if (e.patrolAxis === 'x') {
             e.x += e.patrolDir * spd * dt;
             if (e.x > e.patrolZone.x + e.patrolZone.w - 20) e.patrolDir = -1;
@@ -942,6 +983,10 @@ function startShooterGame(config: GameConfig) {
             e.y += e.patrolDir * spd * dt;
             if (e.y > e.patrolZone.y + e.patrolZone.h - 20) e.patrolDir = -1;
             if (e.y < e.patrolZone.y + 20)                  e.patrolDir =  1;
+          }
+          // In fog: enemies occasionally switch patrol axis for less predictable movement
+          if (FOG_OF_WAR && Math.random() < 0.003) {
+            e.patrolAxis = e.patrolAxis === 'x' ? 'y' : 'x';
           }
         }
         var patRes = this.resolveWallCollision(e.x, e.y, er);
@@ -958,8 +1003,10 @@ function startShooterGame(config: GameConfig) {
           var res = this.resolveWallCollision(nx, ny, er);
           e.x = res.x; e.y = res.y;
         }
-        if (dist < 150 && los) { e.state = 'shoot'; e.shootTimer = 0; }
-        if (dist > 380 || !los) e.state = 'patrol';
+        var shootDist = FOG_OF_WAR ? 100 : 150; // fog: must get closer before firing
+        var loseDist = FOG_OF_WAR ? 250 : 380; // fog: lose interest faster
+        if (dist < shootDist && los) { e.state = 'shoot'; e.shootTimer = 0; }
+        if (dist > loseDist || !los) e.state = 'patrol';
 
       } else if (e.state === 'shoot') {
         var eFireRate = this.currentEnemyFireRate * (e.frMult || 1.0);
@@ -980,11 +1027,34 @@ function startShooterGame(config: GameConfig) {
             this.spawnEnemyGrenade(e);
           }
         }
-        // Scouts can't enter shoot state — fall back to alert
-        if (e.shootsBack === false) { e.state = 'alert'; }
-        if (!los || dist > 240) e.state = 'alert';
-        // Occasionally seek cover when damaged
-        if (e.hp < e.maxHp && Math.random() < 0.008) e.state = 'cover';
+        // Scouts: hit-and-run — dart toward hero, then flee when close
+        if (e.shootsBack === false) {
+          // When scout reaches shoot range, bounce away at high speed
+          e.state = 'fleeing';
+          e.fleeTimer = 1.5; // flee for 1.5 seconds
+          e.fleeAngle = Math.atan2(e.y - hy, e.x - hx); // away from hero
+        }
+        var shootLoseDist = FOG_OF_WAR ? 160 : 240;
+        if (!los || dist > shootLoseDist) e.state = 'alert';
+        // Occasionally seek cover when damaged (more likely in fog — enemies are cautious)
+        var coverChance = FOG_OF_WAR ? 0.015 : 0.008;
+        if (e.hp < e.maxHp && Math.random() < coverChance) e.state = 'cover';
+
+      } else if (e.state === 'fleeing') {
+        // Scouts flee away from hero at boosted speed
+        e.fleeTimer -= dt;
+        if (e.fleeTimer <= 0) {
+          e.state = 'patrol';
+        } else {
+          var fleeSpd = (e.alertSpeed || 95) * 1.5;
+          var fnx = e.x + Math.cos(e.fleeAngle) * fleeSpd * dt;
+          var fny = e.y + Math.sin(e.fleeAngle) * fleeSpd * dt;
+          var fres = this.resolveWallCollision(fnx, fny, er);
+          e.x = fres.x; e.y = fres.y;
+          // Bounce off edges
+          if (e.x <= er + 5 || e.x >= this.W - er - 5) e.fleeAngle = Math.PI - e.fleeAngle;
+          if (e.y <= er + 5 || e.y >= this.H - er - 5) e.fleeAngle = -e.fleeAngle;
+        }
 
       } else if (e.state === 'cover') {
         var target = this.findCoverPoint(e);
@@ -1213,10 +1283,15 @@ function startShooterGame(config: GameConfig) {
 
     updateDifficultyRamp(delta: number) {
       this.rampTimer += delta;
-      var ramp30 = Math.floor(this.rampTimer / 30000);
-      this.currentEnemyFireRate = Math.max(800, ENEMY_FR_BASE - ramp30 * 200);
-      var ramp60 = Math.floor(this.rampTimer / 60000);
-      var newMax = Math.min(8, MAX_ENEMIES + ramp60);
+      // Fire rate ramp: steeper for fewer enemies, gentler for many
+      var rampInterval = MAX_ENEMIES <= 3 ? 25000 : 35000; // aggressive if fewer enemies
+      var rampSteps = Math.floor(this.rampTimer / rampInterval);
+      var frReduction = rampSteps * (FOG_OF_WAR ? 150 : 200); // fog = slower ramp
+      this.currentEnemyFireRate = Math.max(800, ENEMY_FR_BASE - frReduction);
+      // Enemy count ramp: every 45-75s based on base count
+      var enemyRampInterval = MAX_ENEMIES >= 6 ? 75000 : 45000;
+      var rampEnemySteps = Math.floor(this.rampTimer / enemyRampInterval);
+      var newMax = Math.min(8, MAX_ENEMIES + rampEnemySteps);
       if (newMax > this.currentMaxEnemies) {
         this.currentMaxEnemies = newMax;
         var zone = this.zones[Phaser.Math.Between(0, this.zones.length - 1)];
