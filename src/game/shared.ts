@@ -72,6 +72,23 @@ function startGame(config: GameConfig) {
   // Destroy existing game
   if (game) { game.destroy(true); game = null; }
 
+  // Basic config validation — catch obvious problems before Phaser tries to use them
+  if (!config.template) {
+    throw new Error('Missing game template');
+  }
+  if (!config.heroEmoji && !config.heroSpriteId) {
+    throw new Error('Missing hero (no emoji or sprite)');
+  }
+  if (!config.enemyEmoji && !config.enemySpriteId) {
+    throw new Error('Missing enemy (no emoji or sprite)');
+  }
+  if (typeof config.speed !== 'number' || config.speed <= 0) {
+    config.speed = 300; // safe fallback
+  }
+  if (typeof config.jumpForce !== 'number' || config.jumpForce <= 0) {
+    config.jumpForce = 14; // safe fallback
+  }
+
   if (config.template === 'topdown') {
     startTopDownGame(config);
   } else if (config.template === 'shooter') {

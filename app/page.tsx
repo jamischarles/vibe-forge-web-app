@@ -914,8 +914,16 @@ export default function Home() {
         setGameReady(true)
         setGameError(null)
       } else if (event.data.type === 'GAME_ERROR') {
-        setGameError(event.data.message || 'Game failed to start')
+        const errMsg = event.data.message || 'Game failed to start'
+        setGameError(errMsg)
         setGameReady(false)
+        // Surface error in chat so the user sees it
+        setMessages(prev => {
+          // Avoid duplicate error messages
+          const last = prev[prev.length - 1]
+          if (last?.role === 'assistant' && last.content.startsWith('⚠️ Game error:')) return prev
+          return [...prev, { role: 'assistant', content: `⚠️ Game error: ${errMsg}\n\nTry describing the game again or ask for a different type!` }]
+        })
       }
     }
     window.addEventListener('message', handleMessage)
@@ -939,7 +947,27 @@ export default function Home() {
         const a = BG_ASSETS.find(b => b.id === config.bgId)
         if (a) enriched.bgUrl = a.url
       }
+      setGameReady(false)
+      setGameError(null)
       iframe.contentWindow.postMessage({ type: 'LOAD_CONFIG', config: enriched }, '*')
+
+      // Safety timeout — if GAME_READY never fires within 8s, flag an error
+      const timeoutId = setTimeout(() => {
+        setGameReady(prev => {
+          if (!prev) {
+            setGameError('Game took too long to start — try again or describe a different game')
+          }
+          return prev
+        })
+      }, 8000)
+      // Clear timeout if GAME_READY/GAME_ERROR arrives (via the useEffect listener)
+      const cleanup = (event: MessageEvent) => {
+        if (event.data?.type === 'GAME_READY' || event.data?.type === 'GAME_ERROR') {
+          clearTimeout(timeoutId)
+          window.removeEventListener('message', cleanup)
+        }
+      }
+      window.addEventListener('message', cleanup)
     }
   }, [])
 
