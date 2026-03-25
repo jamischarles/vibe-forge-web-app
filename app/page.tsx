@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, Gamepad2, Sparkles, RefreshCw, MessageSquare, Settings, Code2 } from 'lucide-react'
-import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED_MAX } from '@/lib/types'
+import { GameConfig, GameDifficulty, GameAction, ShooterConfig, SPEED_MIN, SPEED_MAX, VoteRecord, DownvoteCategory, DOWNVOTE_LABELS } from '@/lib/types'
 import { HERO_SPRITES, ENEMY_SPRITES, BG_ASSETS, CharacterAsset, BackgroundAsset } from '@/lib/assets'
 
 type AppState = 'idle' | 'listening' | 'thinking' | 'playing'
@@ -13,6 +13,7 @@ type GameMode = 'config' | 'code' | null
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  vote?: 'up' | 'down' | null
 }
 
 // ── Settings sub-components ────────────────────────────────────────────────
@@ -342,7 +343,91 @@ function DifficultyPicker({ value, onChange }: {
   )
 }
 
-function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobileTarget, onMobileToggle, preferredTemplate, onTemplatePreferenceChange, onTarget }: {
+// ── Vote sub-components ──────────────────────────────────────────────────
+
+function VoteButtons({ vote, onVote }: {
+  vote?: 'up' | 'down' | null
+  onVote: (v: 'up' | 'down') => void
+}) {
+  return (
+    <div className="flex gap-1 mt-1">
+      <button
+        onClick={() => onVote('up')}
+        className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+          vote === 'up' ? 'bg-green-800 text-green-300' : 'text-gray-600 hover:text-gray-400'
+        }`}
+        title="Good response"
+      >
+        👍
+      </button>
+      <button
+        onClick={() => onVote('down')}
+        className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+          vote === 'down' ? 'bg-red-800 text-red-300' : 'text-gray-600 hover:text-gray-400'
+        }`}
+        title="Bad response"
+      >
+        👎
+      </button>
+    </div>
+  )
+}
+
+function DownvoteModal({ onSubmit, onCancel }: {
+  onSubmit: (categories: DownvoteCategory[], freeform: string) => void
+  onCancel: () => void
+}) {
+  const [selected, setSelected] = useState<DownvoteCategory[]>([])
+  const [freeform, setFreeform] = useState('')
+
+  const toggle = (cat: DownvoteCategory) =>
+    setSelected(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
+
+  return (
+    <div className="mt-2 bg-gray-800 border border-gray-600 rounded-xl p-3 space-y-2 max-w-[85%]">
+      <p className="text-xs text-gray-400 font-medium">What went wrong?</p>
+      <div className="flex flex-wrap gap-1.5">
+        {(Object.entries(DOWNVOTE_LABELS) as [DownvoteCategory, string][]).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => toggle(key)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              selected.includes(key)
+                ? 'bg-red-900/60 border-red-600 text-red-300'
+                : 'bg-gray-700 border-gray-600 text-gray-400 hover:border-gray-500'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={freeform}
+        onChange={e => setFreeform(e.target.value)}
+        placeholder="Additional details (optional)"
+        className="w-full bg-gray-700 text-white placeholder-gray-500 rounded-lg px-2.5 py-1.5 text-xs resize-none border border-gray-600 focus:outline-none focus:border-red-500"
+        rows={2}
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={() => onSubmit(selected, freeform)}
+          disabled={selected.length === 0 && !freeform.trim()}
+          className="text-xs px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Submit
+        </button>
+        <button
+          onClick={onCancel}
+          className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobileTarget, onMobileToggle, preferredTemplate, onTemplatePreferenceChange, onTarget, updating }: {
   config: GameConfig | null
   onConfigChange: (config: GameConfig) => void
   gameMode: GameMode
@@ -352,6 +437,7 @@ function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobile
   preferredTemplate: 'runner' | 'topdown' | 'shooter' | 'platformer'
   onTemplatePreferenceChange: (t: 'runner' | 'topdown' | 'shooter' | 'platformer') => void
   onTarget: (prefill: string) => void
+  updating?: boolean
 }) {
   // Code game: read-only panel
   if (gameMode === 'code') {
@@ -407,7 +493,12 @@ function SettingsPanel({ config, onConfigChange, gameMode, codeGameTitle, mobile
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-2">
-      <p className="text-xs text-gray-500 mb-2 px-1">Edit settings — updates the game live ✨</p>
+      <div className="flex items-center justify-between px-1 mb-2">
+        <p className="text-xs text-gray-500">Edit settings — updates the game live</p>
+        {updating && (
+          <span className="text-xs text-blue-400 animate-pulse">Updating...</span>
+        )}
+      </div>
 
       {/* Template toggle */}
       <TemplateToggle value={config.template} onChange={v => update('template', v)} />
@@ -609,6 +700,11 @@ export default function Home() {
   const [mobileTarget, setMobileTarget] = useState(false)
   const [preferredTemplate, setPreferredTemplate] = useState<'runner' | 'topdown' | 'shooter' | 'platformer'>('runner')
 
+  // Vote / feedback state
+  const [settingsUpdating, setSettingsUpdating] = useState(false)
+  const [downvoteModalIndex, setDownvoteModalIndex] = useState<number | null>(null)
+  const sessionIdRef = useRef<string>('')
+
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const recognitionRef = useRef<any>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -625,6 +721,7 @@ export default function Home() {
   const isPlaying = gameMode !== null
 
   useEffect(() => {
+    sessionIdRef.current = crypto.randomUUID()
     const hasSpeech = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
     setVoiceSupported(hasSpeech)
   }, [])
@@ -677,10 +774,52 @@ export default function Home() {
     }
   }, [])
 
+  const settingsUpdatingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleConfigChange = useCallback((config: GameConfig) => {
     setCurrentConfig(config)
     sendConfigToGame(config)
+    setSettingsUpdating(true)
+    if (settingsUpdatingTimer.current) clearTimeout(settingsUpdatingTimer.current)
+    settingsUpdatingTimer.current = setTimeout(() => setSettingsUpdating(false), 800)
   }, [sendConfigToGame])
+
+  // Vote handler — records feedback to API
+  const handleVote = useCallback((messageIndex: number, vote: 'up' | 'down', categories?: DownvoteCategory[], freeform?: string) => {
+    setMessages(prev => prev.map((m, i) =>
+      i === messageIndex ? { ...m, vote } : m
+    ))
+    setDownvoteModalIndex(null)
+
+    const userPrompt = messages.slice(0, messageIndex).reverse().find(m => m.role === 'user')?.content || ''
+
+    const record: VoteRecord = {
+      id: crypto.randomUUID(),
+      sessionId: sessionIdRef.current,
+      timestamp: new Date().toISOString(),
+      vote,
+      messageIndex,
+      messageContent: messages[messageIndex].content,
+      userPrompt,
+      gameTemplate: currentConfig?.template || null,
+      gameMode,
+      gameConfig: currentConfig,
+      mobileTarget,
+      deviceInfo: {
+        userAgent: navigator.userAgent,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        touch: 'ontouchstart' in window,
+      },
+      downvoteCategories: vote === 'down' ? categories : undefined,
+      downvoteFreeform: vote === 'down' ? freeform : undefined,
+      stateSlug: undefined, // future: URL slug for state recreation
+    }
+
+    fetch('/api/votes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    }).catch(console.error)
+  }, [messages, currentConfig, gameMode, mobileTarget])
 
   // Chat targeting — pre-fill textarea with context and switch to Chat tab
   const handleTarget = useCallback((prefill: string) => {
@@ -1000,6 +1139,7 @@ export default function Home() {
             preferredTemplate={preferredTemplate}
             onTemplatePreferenceChange={setPreferredTemplate}
             onTarget={handleTarget}
+            updating={settingsUpdating}
           />
         ) : (
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -1053,7 +1193,7 @@ export default function Home() {
             )}
 
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                   msg.role === 'user'
                     ? 'bg-green-600 text-white rounded-br-md'
@@ -1061,6 +1201,24 @@ export default function Home() {
                 }`}>
                   {msg.content}
                 </div>
+                {msg.role === 'assistant' && (
+                  <VoteButtons
+                    vote={msg.vote}
+                    onVote={(v) => {
+                      if (v === 'down' && msg.vote !== 'down') {
+                        setDownvoteModalIndex(i)
+                      } else {
+                        handleVote(i, v)
+                      }
+                    }}
+                  />
+                )}
+                {msg.role === 'assistant' && downvoteModalIndex === i && (
+                  <DownvoteModal
+                    onSubmit={(cats, text) => handleVote(i, 'down', cats, text)}
+                    onCancel={() => setDownvoteModalIndex(null)}
+                  />
+                )}
               </div>
             ))}
 
@@ -1092,8 +1250,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* Input Area — always visible */}
-        <div className="p-4 border-t border-gray-700 space-y-3">
+        {/* Input Area — only visible on Chat tab */}
+        {activeTab === 'chat' && <div className="p-4 border-t border-gray-700 space-y-3">
           {state === 'listening' && transcript && (
             <div className="text-xs text-green-400 bg-green-900/30 rounded-lg px-3 py-2">
               🎤 &quot;{transcript}&quot;
@@ -1195,7 +1353,7 @@ export default function Home() {
               {submitLabel}
             </button>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ── Game iframe ────────────────────────────────────────────────────────

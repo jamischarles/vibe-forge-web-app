@@ -109,3 +109,46 @@ export interface GameCodeResult {
 }
 
 export type GameResult = GameConfigResult | GameCodeResult
+
+// ── Response voting ─────────────────────────────────────────────────────────
+
+export type DownvoteCategory =
+  | 'wrong-game-type'
+  | 'bad-visuals'
+  | 'too-hard'
+  | 'too-easy'
+  | 'ignored-instructions'
+  | 'broken-buggy'
+  | 'other'
+
+export const DOWNVOTE_LABELS: Record<DownvoteCategory, string> = {
+  'wrong-game-type':      'Wrong game type',
+  'bad-visuals':          'Bad visuals',
+  'too-hard':             'Too hard',
+  'too-easy':             'Too easy',
+  'ignored-instructions': 'Ignored instructions',
+  'broken-buggy':         'Broken / buggy',
+  'other':                'Other',
+}
+
+export interface VoteRecord {
+  id: string                    // unique vote ID
+  sessionId: string             // groups votes in one session
+  timestamp: string             // ISO 8601
+  vote: 'up' | 'down'
+  messageIndex: number          // which assistant message
+  messageContent: string        // the assistant response text
+  userPrompt: string            // the user message that triggered this response
+  gameTemplate: string | null
+  gameMode: string | null
+  gameConfig: GameConfig | null
+  mobileTarget: boolean
+  deviceInfo: {
+    userAgent: string
+    viewport: { width: number; height: number }
+    touch: boolean
+  }
+  downvoteCategories?: DownvoteCategory[]
+  downvoteFreeform?: string
+  stateSlug?: string            // vote ID — future URL slug for state recreation
+}
