@@ -2,9 +2,16 @@ import OpenAI from 'openai'
 
 // ── Client ───────────────────────────────────────────────────────────────────
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+let client: OpenAI | null = null
+
+function getClient(): OpenAI {
+  if (!client) {
+    client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  }
+  return client
+}
 
 // ── Model tiers ──────────────────────────────────────────────────────────────
 
@@ -25,7 +32,7 @@ export async function callAgent<T>(opts: {
 }): Promise<T> {
   const { systemPrompt, userMessage, tier, maxTokens = 4096 } = opts
 
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model: getModel(tier),
     max_tokens: maxTokens,
     response_format: { type: 'json_object' },
