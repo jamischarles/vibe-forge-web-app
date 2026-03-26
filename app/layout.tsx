@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Game Maker',
-  description: 'Make your own game!',
+  title: 'VibeForge',
+  description: 'AI-native UI/UX design canvas',
 }
 
 export const viewport: Viewport = {
