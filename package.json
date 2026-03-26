@@ -1,33 +1,30 @@
 {
-  "name": "kids-game-builder",
-  "version": "0.5.0",
+  "name": "vibe-forge",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build:game && next build",
+    "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "build:game": "node_modules/.bin/esbuild src/game/shared.ts src/game/action-system.ts --outdir=public/scenes --platform=browser --target=es2020 && node_modules/.bin/esbuild src/game/scenes/shooter-modes.ts src/game/scenes/runner.ts src/game/scenes/topdown.ts src/game/scenes/shooter.ts src/game/scenes/platformer.ts --outdir=public/scenes --platform=browser --target=es2020",
-    "dev:game": "node_modules/.bin/esbuild src/game/shared.ts src/game/action-system.ts --outdir=public/scenes --platform=browser --target=es2020 --watch & node_modules/.bin/esbuild src/game/scenes/shooter-modes.ts src/game/scenes/runner.ts src/game/scenes/topdown.ts src/game/scenes/shooter.ts src/game/scenes/platformer.ts --outdir=public/scenes --platform=browser --target=es2020 --watch",
-    "type-check:game": "node node_modules/typescript/bin/tsc --noEmit --project tsconfig.game.json"
+    "lint": "next lint"
   },
   "dependencies": {
-    "next": "15.3.9",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "openai": "^4.20.0",
-    "lucide-react": "^0.460.0",
+    "@anthropic-ai/sdk": "^0.39.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.5"
+    "lucide-react": "^0.460.0",
+    "next": "15.3.9",
+    "openai": "^6.33.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.5",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.20",
-    "esbuild": "^0.25.0",
-    "phaser": "3.70.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.15",
     "typescript": "^5"
