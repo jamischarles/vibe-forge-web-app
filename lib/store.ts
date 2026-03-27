@@ -13,6 +13,7 @@ import {
   createId,
   createProject,
 } from './vf-types'
+import { getCategoryById } from './recipes'
 
 // ── Store Interface ──────────────────────────────────────────────────────────
 
@@ -20,6 +21,14 @@ interface VibeForgeStore {
   // Project state
   project: Project | null
   phase: DesignPhase
+
+  // Recipe setup
+  recipeCategoryId: string | null
+  selectedBlockIds: string[]
+
+  // Flow navigation
+  activeScreenId: string | null   // non-null = zoomed detail mode on canvas
+  focusedScreenId: string | null  // non-null = highlighted in overview, preview in panel
 
   // Breadboard voting
   breadboardVariants: BreadboardData[]
@@ -53,6 +62,14 @@ interface VibeForgeStore {
   setJTBD: (jtbd: JTBDStatement) => void
   setScreens: (screens: Screen[]) => void
   updateProject: (partial: Partial<Project>) => void
+
+  // Recipe
+  setRecipeCategory: (id: string) => void
+  toggleBlock: (id: string) => void
+
+  // Flow navigation
+  setActiveScreen: (id: string | null) => void
+  setFocusedScreen: (id: string | null) => void
 
   // Phase
   setPhase: (phase: DesignPhase) => void
@@ -105,6 +122,12 @@ export const useStore = create<VibeForgeStore>()(
       project: null,
       phase: 'setup',
 
+      recipeCategoryId: null,
+      selectedBlockIds: [],
+
+      activeScreenId: null,
+      focusedScreenId: null,
+
       breadboardVariants: [],
       breadboardRound: 1,
       variantVotes: {},
@@ -128,8 +151,9 @@ export const useStore = create<VibeForgeStore>()(
       // ── Project actions ──────────────────────────────────────────────────
 
       initProject: (name, description) => {
+        const { recipeCategoryId, selectedBlockIds } = get()
         set({
-          project: createProject({ name, description }),
+          project: createProject({ name, description, recipeCategoryId, selectedBlockIds }),
           phase: 'setup',
           messages: [],
           breadboardVariants: [],
@@ -166,9 +190,33 @@ export const useStore = create<VibeForgeStore>()(
         set({ project: { ...project, ...partial, updatedAt: new Date().toISOString() } })
       },
 
+      // ── Recipe actions ─────────────────────────────────────────────────
+
+      setRecipeCategory: (id) => {
+        const cat = getCategoryById(id)
+        set({
+          recipeCategoryId: id,
+          selectedBlockIds: cat?.suggestedBlockIds ?? [],
+        })
+      },
+
+      toggleBlock: (id) => set((s) => {
+        const has = s.selectedBlockIds.includes(id)
+        return {
+          selectedBlockIds: has
+            ? s.selectedBlockIds.filter((b) => b !== id)
+            : [...s.selectedBlockIds, id],
+        }
+      }),
+
+      // ── Flow navigation actions ────────────────────────────────────────
+
+      setActiveScreen: (id) => set({ activeScreenId: id }),
+      setFocusedScreen: (id) => set({ focusedScreenId: id }),
+
       // ── Phase actions ────────────────────────────────────────────────────
 
-      setPhase: (phase) => set({ phase }),
+      setPhase: (phase) => set({ phase, activeScreenId: null, focusedScreenId: null }),
 
       advancePhase: () => {
         const { phase } = get()
@@ -189,7 +237,7 @@ export const useStore = create<VibeForgeStore>()(
         variantVotes: { ...s.variantVotes, [variantId]: vote },
       })),
 
-      selectBreadboardVariant: (variantId) => set({ selectedVariantId: variantId }),
+      selectBreadboardVariant: (variantId) => set({ selectedVariantId: variantId, activeScreenId: null, focusedScreenId: null }),
 
       commitBreadboard: (variant) => {
         const { project } = get()
@@ -304,6 +352,10 @@ export const useStore = create<VibeForgeStore>()(
       resetProject: () => set({
         project: null,
         phase: 'setup',
+        recipeCategoryId: null,
+        selectedBlockIds: [],
+        activeScreenId: null,
+        focusedScreenId: null,
         messages: [],
         breadboardVariants: [],
         breadboardRound: 1,

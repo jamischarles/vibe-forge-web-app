@@ -23,16 +23,25 @@ const SETUP_SYSTEM_PROMPT = `You are a UX strategy agent. Given a product descri
 2. 4-8 key screens
 3. 2-4 user flows
 
+If the user has selected building blocks, you MUST include those as screens/flows. You may add additional screens beyond the blocks.
+
 Return JSON:
 {"jtbd":{"situation":"...","motivation":"...","outcome":"...","raw":"Full sentence"},"suggestedScreens":[{"name":"...","description":"..."}],"suggestedFlows":[{"name":"...","steps":["A","B"]}]}
 
 Be opinionated about good UX. Return ONLY valid JSON.`
 
-export async function extractJTBD(description: string): Promise<{ result: SetupResult; timing: AgentTiming }> {
+export async function extractJTBD(
+  description: string,
+  buildingBlocksContext?: string,
+): Promise<{ result: SetupResult; timing: AgentTiming }> {
+  let userMessage = description
+  if (buildingBlocksContext) {
+    userMessage += `\n\nRequired building blocks (MUST include as screens/flows):\n${buildingBlocksContext}`
+  }
   const { data, timing } = await callAgent<SetupResult>({
     label: 'extractJTBD',
     systemPrompt: SETUP_SYSTEM_PROMPT,
-    userMessage: description,
+    userMessage,
     tier: 'fast',
   })
   return { result: data, timing }
@@ -70,8 +79,9 @@ async function generateSingleVariant(opts: {
   screens: { name: string; description: string }[]
   flows: { name: string; steps: string[] }[]
   feedback?: string
+  buildingBlocksContext?: string
 }): Promise<{ variant: BreadboardData; timing: AgentTiming }> {
-  const { index, pattern, jtbd, screens, flows, feedback } = opts
+  const { index, pattern, jtbd, screens, flows, feedback, buildingBlocksContext } = opts
 
   const userMessage = `Pattern: ${pattern.name} — ${pattern.hint}
 
@@ -82,6 +92,7 @@ ${screens.map((s) => `- ${s.name}: ${s.description}`).join('\n')}
 
 Flows:
 ${flows.map((f) => `- ${f.name}: ${f.steps.join(' → ')}`).join('\n')}
+${buildingBlocksContext ? `\nRequired building blocks (MUST include as places with their affordances):\n${buildingBlocksContext}` : ''}
 ${feedback ? `\nUser feedback: ${feedback}` : ''}`
 
   const { data, timing } = await callAgent<BreadboardData>({
@@ -105,8 +116,9 @@ export async function generateBreadboards(opts: {
   flows: { name: string; steps: string[] }[]
   count?: number
   feedback?: string
+  buildingBlocksContext?: string
 }): Promise<{ variants: BreadboardData[]; timings: AgentTiming[] }> {
-  const { jtbd, screens, flows, count = 4, feedback } = opts
+  const { jtbd, screens, flows, count = 4, feedback, buildingBlocksContext } = opts
 
   // Pick patterns for the requested count
   const selectedPatterns = PATTERNS.slice(0, count)
@@ -120,6 +132,7 @@ export async function generateBreadboards(opts: {
       screens,
       flows,
       feedback: feedback || undefined,
+      buildingBlocksContext,
     })
   )
 

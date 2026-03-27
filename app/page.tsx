@@ -3,15 +3,19 @@
 import { useCallback, useState } from 'react'
 import { RotateCcw, Download } from 'lucide-react'
 import { useStore } from '@/lib/store'
+import { formatBlocksForPrompt } from '@/lib/recipes'
 import type { BreadboardData, FatMarkerData, HiFiData, FidelityLevel } from '@/lib/vf-types'
 
 import PhaseIndicator from '@/components/panels/PhaseIndicator'
 import ChatPanel from '@/components/panels/ChatPanel'
 import JTBDPanel from '@/components/panels/JTBDPanel'
 import VotingPanel from '@/components/panels/VotingPanel'
+import RecipeSetupPanel from '@/components/panels/RecipeSetupPanel'
+import ScreenPreviewPanel from '@/components/panels/ScreenPreviewPanel'
 import BreadboardRenderer from '@/components/canvas/BreadboardRenderer'
 import FatMarkerRenderer from '@/components/canvas/FatMarkerRenderer'
 import HiFiRenderer from '@/components/canvas/HiFiRenderer'
+import FlowNavBar from '@/components/canvas/FlowNavBar'
 
 // ── API helper ───────────────────────────────────────────────────────────────
 
@@ -52,6 +56,10 @@ async function callDesignAPI(body: Record<string, unknown>) {
 export default function Home() {
   const {
     project, phase, messages, isGenerating,
+    // Recipe
+    recipeCategoryId, selectedBlockIds,
+    // Flow navigation
+    activeScreenId, focusedScreenId,
     // Breadboard
     breadboardVariants, selectedVariantId,
     // Fat marker
@@ -60,6 +68,8 @@ export default function Home() {
     hifiVariants, selectedHifiId,
     // Actions
     initProject, setJTBD, updateProject, setPhase,
+    setRecipeCategory, toggleBlock,
+    setActiveScreen, setFocusedScreen,
     setBreadboardVariants, selectBreadboardVariant,
     commitBreadboard,
     setFatMarkerVariants, selectFatMarkerVariant, commitFatMarker,
@@ -79,12 +89,18 @@ export default function Home() {
     addMessage({ role: 'user', content: text })
     setGenerating(true)
 
+    // Build building blocks context for the AI
+    const blocksContext = formatBlocksForPrompt(selectedBlockIds)
+
     try {
       // Step 1: Extract JTBD
       const setupResult = await callDesignAPI({
         phase: 'setup',
         action: 'setup',
         prompt: text,
+        projectContext: {
+          buildingBlocksContext: blocksContext || undefined,
+        },
       })
 
       setJTBD(setupResult.jtbd)
@@ -92,9 +108,13 @@ export default function Home() {
         businessObjectives: setupResult.suggestedScreens.map((s: { description: string }) => s.description),
       })
 
+      const blocksSuffix = selectedBlockIds.length > 0
+        ? ` I incorporated your ${selectedBlockIds.length} selected building blocks.`
+        : ''
+
       addMessage({
         role: 'assistant',
-        content: `I've analyzed your idea and extracted a JTBD statement:\n\n"${setupResult.jtbd.raw}"\n\nI identified ${setupResult.suggestedScreens.length} key screens and ${setupResult.suggestedFlows.length} user flows. Generating breadboard variants now...`,
+        content: `I've analyzed your idea and extracted a JTBD statement:\n\n"${setupResult.jtbd.raw}"\n\nI identified ${setupResult.suggestedScreens.length} key screens and ${setupResult.suggestedFlows.length} user flows.${blocksSuffix} Generating breadboard variants now...`,
         metadata: {
           phase: 'setup',
           changesSummary: [
@@ -113,6 +133,7 @@ export default function Home() {
           jtbd: setupResult.jtbd,
           screens: setupResult.suggestedScreens,
           flows: setupResult.suggestedFlows,
+          buildingBlocksContext: blocksContext || undefined,
         },
       })
 
@@ -121,7 +142,7 @@ export default function Home() {
 
       addMessage({
         role: 'assistant',
-        content: `Generated ${bbResult.variants.length} breadboard variants. Review and vote on each one — upvote what you like, downvote what doesn't work, and star your favorite.`,
+        content: `Generated ${bbResult.variants.length} breadboard variants. Review and vote on each one — click a screen node to preview it, or double-click to zoom into its detail view.`,
         metadata: { phase: 'breadboard' },
       })
     } catch (error) {
@@ -132,7 +153,7 @@ export default function Home() {
     } finally {
       setGenerating(false)
     }
-  }, [project, initProject, addMessage, setGenerating, setJTBD, updateProject, setBreadboardVariants, setPhase])
+  }, [project, selectedBlockIds, initProject, addMessage, setGenerating, setJTBD, updateProject, setBreadboardVariants, setPhase])
 
   // ── Fat marker phase: generate after breadboard commit ───────────────────
 
@@ -250,6 +271,25 @@ export default function Home() {
     URL.revokeObjectURL(url)
   }, [project])
 
+  // ── Flow navigation handlers ───────────────────────────────────────────
+
+  const handleScreenClick = useCallback((placeId: string) => {
+    setFocusedScreen(placeId)
+  }, [setFocusedScreen])
+
+  const handleScreenDoubleClick = useCallback((placeId: string) => {
+    setActiveScreen(placeId)
+    setFocusedScreen(null)
+  }, [setActiveScreen, setFocusedScreen])
+
+  const handleBackToFlow = useCallback(() => {
+    setActiveScreen(null)
+  }, [setActiveScreen])
+
+  const handleNavigateToScreen = useCallback((placeId: string) => {
+    setActiveScreen(placeId)
+  }, [setActiveScreen])
+
   // ── Canvas content ───────────────────────────────────────────────────────
 
   const selectedBreadboard = breadboardVariants.find((v) => v.id === selectedVariantId) ?? null
@@ -258,12 +298,29 @@ export default function Home() {
 
   const committedScreen = project?.screens[0] ?? null
 
+  // Get the current breadboard for flow nav (either selected variant or committed)
+  const currentBreadboard = phase === 'export' && xrayLevel === 'breadboard'
+    ? committedScreen?.breadboard ?? null
+    : phase === 'breadboard'
+      ? selectedBreadboard
+      : null
+
   function renderCanvas() {
     // In export phase, use X-ray toggle to switch fidelity views
     if (phase === 'export' && committedScreen) {
       switch (xrayLevel) {
         case 'breadboard':
-          return <BreadboardRenderer data={committedScreen.breadboard} />
+          return (
+            <BreadboardRenderer
+              data={committedScreen.breadboard}
+              activeScreenId={activeScreenId}
+              focusedScreenId={focusedScreenId}
+              onScreenClick={handleScreenClick}
+              onScreenDoubleClick={handleScreenDoubleClick}
+              onBackToFlow={handleBackToFlow}
+              onNavigateToScreen={handleNavigateToScreen}
+            />
+          )
         case 'fatMarker':
           return <FatMarkerRenderer data={committedScreen.fatMarker} />
         case 'hifi':
@@ -273,7 +330,17 @@ export default function Home() {
 
     switch (phase) {
       case 'breadboard':
-        return <BreadboardRenderer data={selectedBreadboard} />
+        return (
+          <BreadboardRenderer
+            data={selectedBreadboard}
+            activeScreenId={activeScreenId}
+            focusedScreenId={focusedScreenId}
+            onScreenClick={handleScreenClick}
+            onScreenDoubleClick={handleScreenDoubleClick}
+            onBackToFlow={handleBackToFlow}
+            onNavigateToScreen={handleNavigateToScreen}
+          />
+        )
       case 'fatMarker':
         return <FatMarkerRenderer data={selectedFatMarker} />
       case 'hifi':
@@ -382,7 +449,7 @@ export default function Home() {
                           : 'text-gray-700 cursor-not-allowed'
                     }`}
                   >
-                    {level === 'breadboard' ? '⬡' : level === 'fatMarker' ? '▧' : '✦'}
+                    {level === 'breadboard' ? '\u2B21' : level === 'fatMarker' ? '\u25A7' : '\u2726'}
                   </button>
                 )
               })}
@@ -407,7 +474,7 @@ export default function Home() {
               <RotateCcw size={16} />
             </button>
           )}
-          <span className="text-[10px] text-gray-700">v0.1.0</span>
+          <span className="text-[10px] text-gray-700">v0.2.0</span>
         </div>
       </header>
 
@@ -419,6 +486,30 @@ export default function Home() {
           <div className="flex-shrink-0 p-3 border-b border-gray-800/50">
             <JTBDPanel jtbd={project?.jtbd ?? null} />
           </div>
+
+          {/* Recipe setup panel (setup phase only) */}
+          {(phase === 'setup') && (
+            <div className="flex-shrink-0 p-3 border-b border-gray-800/50 max-h-[45%] overflow-y-auto">
+              <RecipeSetupPanel
+                recipeCategoryId={recipeCategoryId}
+                selectedBlockIds={selectedBlockIds}
+                onSelectCategory={setRecipeCategory}
+                onToggleBlock={toggleBlock}
+              />
+            </div>
+          )}
+
+          {/* Screen preview panel (when a screen is focused in breadboard) */}
+          {focusedScreenId && !activeScreenId && currentBreadboard && (
+            <div className="flex-shrink-0 p-3 border-b border-gray-800/50 max-h-[35%] overflow-y-auto">
+              <ScreenPreviewPanel
+                data={currentBreadboard}
+                placeId={focusedScreenId}
+                onZoomIn={handleScreenDoubleClick}
+                onClose={() => setFocusedScreen(null)}
+              />
+            </div>
+          )}
 
           {/* Voting panel (shown during voting phases) */}
           {(phase === 'breadboard' || phase === 'fatMarker' || phase === 'hifi') && (
@@ -439,9 +530,21 @@ export default function Home() {
         </div>
 
         {/* ── Canvas area ─────────────────────────────────────────────── */}
-        <div className="flex-1 p-4 overflow-hidden">
-          <div className="w-full h-full rounded-xl border border-gray-800 bg-gray-950 overflow-hidden">
-            {renderCanvas()}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Flow nav bar (shown when zoomed into a screen) */}
+          {activeScreenId && currentBreadboard && (
+            <FlowNavBar
+              data={currentBreadboard}
+              activeScreenId={activeScreenId}
+              onNavigate={handleNavigateToScreen}
+              onBackToOverview={handleBackToFlow}
+            />
+          )}
+
+          <div className="flex-1 p-4 overflow-hidden">
+            <div className="w-full h-full rounded-xl border border-gray-800 bg-gray-950 overflow-hidden">
+              {renderCanvas()}
+            </div>
           </div>
         </div>
       </div>
