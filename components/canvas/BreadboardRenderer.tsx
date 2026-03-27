@@ -1,6 +1,7 @@
 'use client'
 
 import { BreadboardData, Place, Affordance, Connection } from '@/lib/vf-types'
+import PannableCanvas from './PannableCanvas'
 
 interface BreadboardRendererProps {
   data: BreadboardData | null
@@ -50,7 +51,7 @@ export default function BreadboardRenderer({ data, className }: BreadboardRender
   const placeMap = new Map(data.places.map((p) => [p.id, p]))
 
   return (
-    <div className={`w-full h-full ${className ?? ''}`}>
+    <PannableCanvas className={className}>
       <svg
         viewBox="0 0 800 600"
         className="w-full h-full"
@@ -160,6 +161,6 @@ export default function BreadboardRenderer({ data, className }: BreadboardRender
           })}
         </g>
       </svg>
-    </div>
+    </PannableCanvas>
   )
 }

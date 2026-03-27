@@ -1,4 +1,4 @@
-import { callAgent } from './shared'
+import { callAgent, AgentTiming } from './shared'
 import { BreadboardData, FatMarkerData, LayoutRegion } from '../vf-types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ export async function generateFatMarkers(opts: {
   jtbdRaw: string
   count?: number
   moodDescription?: string
-}): Promise<FatMarkerData[]> {
+}): Promise<{ variants: FatMarkerData[]; timing: AgentTiming }> {
   const { breadboard, productDescription, jtbdRaw, count = 3, moodDescription } = opts
 
   const userMessage = `Product: ${productDescription}
@@ -61,11 +61,12 @@ Affordances: ${breadboard.affordances.map((a) => `${a.label} (${a.type})`).join(
 Generate ${count} distinct spatial layout variants for the primary screen.`
 
   const systemPrompt = FAT_MARKER_SYSTEM_PROMPT.replace('{count}', String(count))
-  const result = await callAgent<FatMarkerVariantsResult>({
+  const { data, timing } = await callAgent<FatMarkerVariantsResult>({
+    label: 'generateFatMarkers',
     systemPrompt,
     userMessage,
     tier: 'fast',
   })
 
-  return result.variants
+  return { variants: data.variants, timing }
 }

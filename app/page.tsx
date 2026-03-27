@@ -16,6 +16,7 @@ import HiFiRenderer from '@/components/canvas/HiFiRenderer'
 // ── API helper ───────────────────────────────────────────────────────────────
 
 async function callDesignAPI(body: Record<string, unknown>) {
+  const clientStart = Date.now()
   const res = await fetch('/api/generate-design', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,7 +26,25 @@ async function callDesignAPI(body: Record<string, unknown>) {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }))
     throw new Error(err.error ?? `HTTP ${res.status}`)
   }
-  return res.json()
+  const data = await res.json()
+  const clientMs = Date.now() - clientStart
+
+  // Log timing from server + client round-trip
+  if (data.timing) {
+    const { agents, totalMs } = data.timing
+    const totalPromptTokens = agents.reduce((s: number, a: { promptTokens: number }) => s + a.promptTokens, 0)
+    const totalCompletionTokens = agents.reduce((s: number, a: { completionTokens: number }) => s + a.completionTokens, 0)
+    const agentSummary = agents
+      .map((a: { label: string; durationMs: number; promptTokens: number; completionTokens: number }) =>
+        `${a.label}: ${a.durationMs}ms (${a.promptTokens}+${a.completionTokens} tok)`)
+      .join(', ')
+    console.log(
+      `[vibeforge] action=${body.action} | server=${totalMs}ms | client=${clientMs}ms | ` +
+      `tokens=${totalPromptTokens}+${totalCompletionTokens} | agents=[${agentSummary}]`
+    )
+  }
+
+  return data
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────

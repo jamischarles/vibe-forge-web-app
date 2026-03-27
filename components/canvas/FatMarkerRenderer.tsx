@@ -1,6 +1,7 @@
 'use client'
 
 import { FatMarkerData } from '@/lib/vf-types'
+import PannableCanvas from './PannableCanvas'
 
 interface FatMarkerRendererProps {
   data: FatMarkerData | null
@@ -33,7 +34,7 @@ export default function FatMarkerRenderer({ data, className }: FatMarkerRenderer
   }
 
   return (
-    <div className={`w-full h-full ${className ?? ''}`}>
+    <PannableCanvas className={className}>
       <svg viewBox="0 0 800 600" className="w-full h-full" style={{ maxHeight: '100%' }}>
         {data.regions.map((region) => {
           const color = REGION_COLORS[region.type] ?? '#6b7280'
@@ -95,6 +96,6 @@ export default function FatMarkerRenderer({ data, className }: FatMarkerRenderer
           </g>
         )}
       </svg>
-    </div>
+    </PannableCanvas>
   )
 }

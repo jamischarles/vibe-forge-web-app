@@ -1,4 +1,4 @@
-import { callAgent } from './shared'
+import { callAgent, AgentTiming } from './shared'
 import { BreadboardData, FatMarkerData, HiFiData } from '../vf-types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ export async function generateHiFi(opts: {
   jtbdRaw: string
   count?: number
   moodDescription?: string
-}): Promise<HiFiData[]> {
+}): Promise<{ variants: HiFiData[]; timing: AgentTiming }> {
   const { breadboard, fatMarker, productDescription, jtbdRaw, count = 2, moodDescription } = opts
 
   const userMessage = `Product: ${productDescription}
@@ -63,12 +63,13 @@ Typography: heading=${fatMarker.typographyHints.headingWeight}, body=${fatMarker
 Generate ${count} distinct hi-fi HTML/CSS renders.`
 
   const systemPrompt = HIFI_SYSTEM_PROMPT.replace('{count}', String(count))
-  const result = await callAgent<HiFiVariantsResult>({
+  const { data, timing } = await callAgent<HiFiVariantsResult>({
+    label: 'generateHiFi',
     systemPrompt,
     userMessage,
     tier: 'quality',
     maxTokens: 8192,
   })
 
-  return result.variants
+  return { variants: data.variants, timing }
 }
