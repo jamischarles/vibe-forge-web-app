@@ -13,6 +13,8 @@ export interface Project {
   screens: Screen[]
   flows: Flow[]
   moodBoardRefs: MoodBoardRef[]
+  recipeCategoryId: string | null
+  selectedBlockIds: string[]
   createdAt: string
   updatedAt: string
 }
@@ -201,6 +203,8 @@ export function createProject(partial: {
   description: string
   purpose?: ProjectPurpose
   desiredOutput?: OutputType
+  recipeCategoryId?: string | null
+  selectedBlockIds?: string[]
 }): Project {
   const now = new Date().toISOString()
   return {
@@ -214,6 +218,8 @@ export function createProject(partial: {
     screens: [],
     flows: [],
     moodBoardRefs: [],
+    recipeCategoryId: partial.recipeCategoryId ?? null,
+    selectedBlockIds: partial.selectedBlockIds ?? [],
     createdAt: now,
     updatedAt: now,
   }

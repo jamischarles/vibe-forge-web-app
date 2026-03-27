@@ -17,6 +17,7 @@ interface GenerateDesignRequest {
     breadboard?: BreadboardData
     fatMarker?: FatMarkerData
     moodDescription?: string
+    buildingBlocksContext?: string
   }
 }
 
@@ -59,7 +60,10 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'setup': {
-        const { result, timing: setupTiming } = await extractJTBD(prompt)
+        const { result, timing: setupTiming } = await extractJTBD(
+          prompt,
+          projectContext?.buildingBlocksContext,
+        )
         timings.push(setupTiming)
         const totalMs = Date.now() - requestStart
         console.log(`[route:setup] totalMs=${totalMs}`)
@@ -75,6 +79,7 @@ export async function POST(request: NextRequest) {
           screens: projectContext.screens,
           flows: projectContext.flows ?? [],
           count: 4,
+          buildingBlocksContext: projectContext.buildingBlocksContext,
         })
         timings.push(...bbTimings)
         const layoutVariants = applyLayout(variants)
@@ -93,6 +98,7 @@ export async function POST(request: NextRequest) {
           flows: projectContext.flows ?? [],
           count: 3,
           feedback: prompt,
+          buildingBlocksContext: projectContext.buildingBlocksContext,
         })
         timings.push(...remixTimings)
         const layoutVariants = applyLayout(variants)
