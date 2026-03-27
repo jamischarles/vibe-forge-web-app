@@ -53,17 +53,17 @@ export default function Home() {
   const {
     project, phase, messages, isGenerating,
     // Breadboard
-    breadboardVariants, breadboardRound, variantVotes, selectedVariantId,
+    breadboardVariants, selectedVariantId,
     // Fat marker
-    fatMarkerVariants, fatMarkerRound, fatMarkerVotes, selectedFatMarkerId,
+    fatMarkerVariants, selectedFatMarkerId,
     // Hi-fi
-    hifiVariants, hifiRound, hifiVotes, selectedHifiId,
+    hifiVariants, selectedHifiId,
     // Actions
     initProject, setJTBD, updateProject, setPhase,
-    setBreadboardVariants, voteBreadboardVariant, selectBreadboardVariant,
-    commitBreadboard, nextBreadboardRound,
-    setFatMarkerVariants, voteFatMarkerVariant, selectFatMarkerVariant, commitFatMarker,
-    setHifiVariants, voteHifiVariant, selectHifiVariant, commitHifi,
+    setBreadboardVariants, selectBreadboardVariant,
+    commitBreadboard,
+    setFatMarkerVariants, selectFatMarkerVariant, commitFatMarker,
+    setHifiVariants, selectHifiVariant, commitHifi,
     addMessage, setGenerating, resetProject,
   } = useStore()
 
@@ -133,43 +133,6 @@ export default function Home() {
       setGenerating(false)
     }
   }, [project, initProject, addMessage, setGenerating, setJTBD, updateProject, setBreadboardVariants, setPhase])
-
-  // ── Breadboard phase: handle next round ──────────────────────────────────
-
-  const handleBreadboardNextRound = useCallback(async () => {
-    setGenerating(true)
-    addMessage({ role: 'system', content: `Starting voting round ${breadboardRound + 1}...` })
-
-    try {
-      const result = await callDesignAPI({
-        phase: 'breadboard',
-        action: 'remix_breadboards',
-        prompt: project?.description ?? '',
-        projectContext: {
-          jtbd: project?.jtbd ?? undefined,
-          screens: project?.businessObjectives.map((d, i) => ({
-            name: `Screen ${i + 1}`,
-            description: d,
-          })),
-        },
-      })
-
-      nextBreadboardRound(result.variants)
-
-      addMessage({
-        role: 'assistant',
-        content: `Generated ${result.variants.length} remixed variants based on your votes. Vote again!`,
-        metadata: { phase: 'breadboard' },
-      })
-    } catch (error) {
-      addMessage({
-        role: 'assistant',
-        content: `Error generating remixes: ${error instanceof Error ? error.message : 'Something went wrong'}`,
-      })
-    } finally {
-      setGenerating(false)
-    }
-  }, [project, breadboardVariants, variantVotes, breadboardRound, addMessage, setGenerating, nextBreadboardRound])
 
   // ── Fat marker phase: generate after breadboard commit ───────────────────
 
@@ -328,15 +291,11 @@ export default function Home() {
         return (
           <VotingPanel
             variants={breadboardVariants}
-            votes={variantVotes}
             selectedId={selectedVariantId}
-            round={breadboardRound}
-            maxRounds={3}
             phaseName="Breadboard"
+            nextPhaseName="Fat Marker"
             isGenerating={isGenerating}
-            onVote={voteBreadboardVariant}
             onSelect={selectBreadboardVariant}
-            onNextRound={handleBreadboardNextRound}
             onCommit={(v) => handleCommitBreadboard(v as BreadboardData)}
           />
         )
@@ -344,15 +303,11 @@ export default function Home() {
         return (
           <VotingPanel
             variants={fatMarkerVariants}
-            votes={fatMarkerVotes}
             selectedId={selectedFatMarkerId}
-            round={fatMarkerRound}
-            maxRounds={2}
             phaseName="Layout"
+            nextPhaseName="Hi-Fi"
             isGenerating={isGenerating}
-            onVote={voteFatMarkerVariant}
             onSelect={selectFatMarkerVariant}
-            onNextRound={() => {}}
             onCommit={(v) => handleCommitFatMarker(v as FatMarkerData)}
           />
         )
@@ -360,15 +315,11 @@ export default function Home() {
         return (
           <VotingPanel
             variants={hifiVariants}
-            votes={hifiVotes}
             selectedId={selectedHifiId}
-            round={hifiRound}
-            maxRounds={1}
             phaseName="Hi-Fi"
+            nextPhaseName="Export"
             isGenerating={isGenerating}
-            onVote={voteHifiVariant}
             onSelect={selectHifiVariant}
-            onNextRound={() => {}}
             onCommit={(v) => handleCommitHifi(v as HiFiData)}
           />
         )

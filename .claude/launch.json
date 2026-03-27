@@ -4,8 +4,8 @@
     {
       "name": "vibe-forge",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--port", "3847"],
-      "port": 3847
+      "runtimeArgs": ["next", "dev"],
+      "autoPort": true
     }
   ]
 }
