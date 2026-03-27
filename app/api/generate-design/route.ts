@@ -3,7 +3,7 @@ import { extractJTBD, generateBreadboards } from '@/lib/agents/strategy-agent'
 import { generateFatMarkers } from '@/lib/agents/layout-agent'
 import { generateHiFi } from '@/lib/agents/visual-agent'
 import { computeLayout } from '@/lib/layout'
-import type { DesignPhase, BreadboardData, FatMarkerData, VariantVote, JTBDStatement } from '@/lib/vf-types'
+import type { DesignPhase, BreadboardData, FatMarkerData, JTBDStatement } from '@/lib/vf-types'
 import type { AgentTiming } from '@/lib/agents/shared'
 
 interface GenerateDesignRequest {
@@ -16,8 +16,6 @@ interface GenerateDesignRequest {
     flows?: { name: string; steps: string[] }[]
     breadboard?: BreadboardData
     fatMarker?: FatMarkerData
-    previousVariants?: BreadboardData[]
-    votes?: Record<string, VariantVote>
     moodDescription?: string
   }
 }
@@ -95,8 +93,6 @@ export async function POST(request: NextRequest) {
           flows: projectContext.flows ?? [],
           count: 3,
           feedback: prompt,
-          previousVariants: projectContext.previousVariants,
-          votes: projectContext.votes,
         })
         timings.push(...remixTimings)
         const layoutVariants = applyLayout(variants)

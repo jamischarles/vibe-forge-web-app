@@ -151,8 +151,6 @@ export default function Home() {
             name: `Screen ${i + 1}`,
             description: d,
           })),
-          previousVariants: breadboardVariants,
-          votes: variantVotes,
         },
       })
 

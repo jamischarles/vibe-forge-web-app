@@ -2,7 +2,6 @@ import { callAgent, AgentTiming } from './shared'
 import {
   JTBDStatement,
   BreadboardData,
-  VariantVote,
 } from '../vf-types'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -106,21 +105,8 @@ export async function generateBreadboards(opts: {
   flows: { name: string; steps: string[] }[]
   count?: number
   feedback?: string
-  previousVariants?: BreadboardData[]
-  votes?: Record<string, VariantVote>
 }): Promise<{ variants: BreadboardData[]; timings: AgentTiming[] }> {
-  const { jtbd, screens, flows, count = 4, feedback, previousVariants, votes } = opts
-
-  // Build feedback from previous round votes
-  let combinedFeedback = feedback ?? ''
-  if (previousVariants && votes) {
-    const voted = previousVariants.map((v) => ({
-      name: v.name,
-      description: v.description,
-      vote: votes[v.id] ?? 'none',
-    }))
-    combinedFeedback += `\nPrevious round: ${voted.map((v) => `"${v.name}": ${v.vote}`).join(', ')}. Keep starred/upvoted patterns, avoid downvoted.`
-  }
+  const { jtbd, screens, flows, count = 4, feedback } = opts
 
   // Pick patterns for the requested count
   const selectedPatterns = PATTERNS.slice(0, count)
@@ -133,7 +119,7 @@ export async function generateBreadboards(opts: {
       jtbd,
       screens,
       flows,
-      feedback: combinedFeedback || undefined,
+      feedback: feedback || undefined,
     })
   )
 
